@@ -69,7 +69,7 @@ interface P2PView {
      *     an internal error in the connection library
      * @param url the URL
      */
-    fun receiveURL(neighborId: String, neighborName: String?, url: String)
+    fun receiveUrl(neighborId: String, neighborName: String?, url: String)
 
     /**
      * An interface enabling the [P2PView] to make requests of a controller.

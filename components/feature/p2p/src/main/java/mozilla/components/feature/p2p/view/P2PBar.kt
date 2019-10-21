@@ -86,7 +86,7 @@ class P2PBar @JvmOverloads constructor(
         showConnectButtons(false)
     }
 
-    override fun receiveURL(neighborId: String, neighborName: String?, url: String) {
+    override fun receiveUrl(neighborId: String, neighborName: String?, url: String) {
         AlertDialog.Builder(context)
             .setTitle(context.getString(R.string.mozac_feature_p2p_open_url_title, neighborName
                 ?: neighborId))

@@ -4,7 +4,6 @@
 
 package mozilla.components.feature.p2p.internal
 
-import android.os.Build
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.feature.p2p.view.P2PView
@@ -53,7 +52,7 @@ internal class P2PController(
                 }
 
                 override fun receiveMessage(neighborId: String, neighborName: String?, message: String) {
-                    view.receiveURL(neighborId, neighborName, message)
+                    view.receiveUrl(neighborId, neighborName, message)
                 }
             }
     }
