@@ -22,6 +22,8 @@ import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate.Status
 import com.google.android.gms.nearby.connection.Strategy
 import mozilla.components.support.base.log.logger.Logger
+import java.io.ByteArrayInputStream
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.ConcurrentHashMap
 
@@ -249,7 +251,10 @@ class NearbyConnection(
             listener?.receiveMessage(
                 endpointId,
                 endpointIdsToNames[endpointId],
-                String(payload.asBytes()!!, UTF_8))
+                String(
+                    when (payload.getType()) {
+                        Payload.Type.BYTES -> payload.asBytes()!!
+                        Payload.Type.STREAM -> payload.asStream().asInputStream()
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
@@ -275,7 +280,15 @@ class NearbyConnection(
     fun sendMessage(message: String): Long? {
         val state = connectionState
         if (state is ConnectionState.ReadyToSend) {
-            val payload: Payload = Payload.fromBytes(message.toByteArray(UTF_8))
+            val payload =
+                if (message.length <= MAX_PAYLOAD_BYTES) {
+                    Payload.fromBytes(message.toByteArray(PAYLOAD_ENCODING))
+                } else {
+                    // Logically, it might make more sense to use Payload.fromFile() since we
+                    // know the size of the string, than Payload.fromStream(), but we would
+                    // have to create a file locally to use use the former.
+                    Payload.fromStream(ByteArrayInputStream(message.toByteArray(PAYLOAD_ENCODING)))
+                }
             connectionsClient.sendPayload(state.neighborId, payload)
             updateState(ConnectionState.Sending(
                 state.neighborId,
@@ -302,7 +315,11 @@ class NearbyConnection(
 
     companion object {
         private const val PACKAGE_NAME = "mozilla.components.lib.nearby"
+        private val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
         private val STRATEGY = Strategy.P2P_STAR
+        // The maximum number of bytes to send through Payload.fromBytes();
+        // otherwise, use Payload.getStream()
+        private val MAX_PAYLOAD_BYTES = ConnectionsClient.MAX_BYTES_DATA_SIZE
 
         /**
          * The permissions needed by [NearbyConnection]. It is the client's responsibility
