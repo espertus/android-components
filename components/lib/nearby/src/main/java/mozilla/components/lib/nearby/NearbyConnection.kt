@@ -254,7 +254,11 @@ class NearbyConnection(
                 String(
                     when (payload.getType()) {
                         Payload.Type.BYTES -> payload.asBytes()!!
-                        Payload.Type.STREAM -> payload.asStream().asInputStream()
+                        Payload.Type.STREAM -> payload.asStream()!!.asInputStream().toString().toByteArray(PAYLOAD_ENCODING)
+                        Payload.Type.FILE -> ByteArray(0)
+                        // The Payload API guarantees it will be one of the above 3 options.
+                        else -> ByteArray(0)},
+                    PAYLOAD_ENCODING))
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
