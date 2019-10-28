@@ -329,7 +329,9 @@ class NearbyConnection(
         private val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
         private val STRATEGY = Strategy.P2P_STAR
         // The maximum number of bytes to send through Payload.fromBytes();
-        // otherwise, use Payload.getStream()
+        // otherwise, use Payload.getStream(). We use a constant rather than
+        // hardcoding MAX_BYTES_DATA_SIZE above to make it easier to set a
+        // temporarily low limit.
         private val MAX_PAYLOAD_BYTES = ConnectionsClient.MAX_BYTES_DATA_SIZE
 
         /**

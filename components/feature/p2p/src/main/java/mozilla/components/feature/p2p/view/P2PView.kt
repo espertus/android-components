@@ -115,6 +115,14 @@ interface P2PView {
         fun onSetUrl(url: String, newTab: Boolean = false)
 
         /**
+         * Load the specified data into this tab.
+         *
+         * @param data the contents of the page
+         * @param mimeType the mime type
+         */
+        fun onLoadData(data: String, mimeType: String)
+
+        /**
          * Resets the connection to the neighbor.
          */
         fun onReset()

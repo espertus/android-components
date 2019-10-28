@@ -115,4 +115,9 @@ internal class P2PController(
             }
         }
     }
+
+    override fun onLoadData(data: String, mimeType: String) {
+        // There's a bug in loadData() that makes it necessary to use base64 encoding.
+        sessionUseCases.loadData(data, mimeType, "base64")
+    }
 }
