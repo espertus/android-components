@@ -6,12 +6,13 @@ package mozilla.components.feature.p2p.internal
 
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.feature.p2p.view.P2PBar
 import mozilla.components.feature.p2p.view.P2PView
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.nearby.NearbyConnection
 import mozilla.components.lib.nearby.NearbyConnection.ConnectionState
-import mozilla.components.lib.nearby.NearbyConnectionListener
+import mozilla.components.lib.nearby.NearbyConnectionObserver
 import mozilla.components.support.base.log.logger.Logger
 
 /**
@@ -30,10 +31,10 @@ internal class P2PController(
     fun start() {
         view.listener = this
         nearbyConnection = thunk()
-        nearbyConnection.listener =
-            object : NearbyConnectionListener {
+        nearbyConnection.register(
+            object : NearbyConnectionObserver {
                 @Synchronized
-                override fun updateState(connectionState: ConnectionState) {
+                override fun onStateUpdated(connectionState: ConnectionState) {
                     savedConnectionState = connectionState
                     view.updateStatus(connectionState.name)
                     when (connectionState) {
@@ -47,14 +48,17 @@ internal class P2PController(
                     }
                 }
 
-                override fun messageDelivered(payloadId: Long) {
+                override fun onMessageDelivered(payloadId: Long) {
                     // For now, do nothing.
                 }
 
-                override fun receiveMessage(neighborId: String, neighborName: String?, message: String) {
+                override fun onMessageReceived(neighborId: String, neighborName: String?, message: String) {
                     view.receiveUrl(neighborId, neighborName, message)
                 }
-            }
+            },
+            // I need to do this cast to get an object that extends View
+            view as P2PBar
+        )
     }
 
     fun stop() {}

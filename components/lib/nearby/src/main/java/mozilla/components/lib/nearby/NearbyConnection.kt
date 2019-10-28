@@ -22,6 +22,8 @@ import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate.Status
 import com.google.android.gms.nearby.connection.Strategy
 import mozilla.components.support.base.log.logger.Logger
+import mozilla.components.support.base.observer.Observable
+import mozilla.components.support.base.observer.ObserverRegistry
 import java.io.ByteArrayInputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets.UTF_8
@@ -30,50 +32,38 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * A class that can be run on two devices to allow them to connect. This supports sending a single
  * message at a time in each direction. It contains internal synchronization and may be accessed
- * from any thread
+ * from any thread.
  *
- * @constructor Constructs a new connection, which will call [NearbyConnectionListener.updateState]
+ * @constructor Constructs a new connection, which will call [NearbyConnectionObserver.onStateUpdated]
  *     with an argument of type [ConnectionState.Isolated]. No further action will be taken unless
  *     other methods are called by the client.
- * @param context context needed to initiate connection, used only at start
- * @param name name shown by this device to other devices
- * @param authenticate whether to authenticate the connection (true) or make it automatically (false)
+ * @param connectionsClient the underlying client
+ * @param name a human-readable name for this device
  */
 class NearbyConnection(
-    private val context: Context,
+    private val connectionsClient: ConnectionsClient,
     private val name: String = Build.MODEL,
-    private val authenticate: Boolean = true
-) {
+    private val delegate: ObserverRegistry<NearbyConnectionObserver> = ObserverRegistry()
+) : Observable<NearbyConnectionObserver> by delegate {
     /**
-     * Listener to be notified of changes of status and message transmission. When this
-     * is set, its [NearbyConnectionListener.updateState] method is immediately called.
+     * Another constructor
      */
-    var listener: NearbyConnectionListener? = null
-        set(value) {
-            field = value
-            value?.updateState(if (::connectionState.isInitialized) connectionState else ConnectionState.Isolated)
-        }
-
-    /**
-     * Listener to be notified of changes of status and message transmission. When this
-     * is set, its [NearbyConnectionListener.updateState] method is immediately called.
-     */
-    var listener: NearbyConnectionListener? = null
-        set(value) {
-            field = value
-            value?.updateState(if (::connectionState.isInitialized) connectionState else ConnectionState.Isolated)
-        }
+    constructor(context: Context, name: String = Build.MODEL) : this(Nearby.getConnectionsClient(context), name)
 
     // I assume that the number of endpoints encountered during the lifetime of the application
     // will be small and do not remove them from the map.
     private val endpointIdsToNames = ConcurrentHashMap<String, String>()
 
     /**
-     * The state of the connection. Changes in state are communicated through
-     * [NearbyConnectionListener.updateState].
+     * The state of the connection. Changes in state are communicated to the client through
+     * [NearbyConnectionObserver.onStateUpdated].
      */
     public sealed class ConnectionState {
-        val name = javaClass.simpleName
+        /**
+         * The name of the state, which is the same as the name of the concrete class
+         * (e.g., "Isolated" for [Isolated]).
+         */
+        val name: String = javaClass.simpleName
 
         /**
          * There is no connection to another device and no attempt to connect.
@@ -133,18 +123,29 @@ class NearbyConnection(
         /**
          * The connection has been successfully authenticated (or authentication is disabled).
          * Unless an error occurs, the next state will be [ReadyToSend].
+         *
+         * @param neighborId the neighbor's ID, which is not meant for human readability
+         * @param neighborName the neighbor's human-readable name
          */
         class Connecting(val neighborId: String, val neighborName: String) : ConnectionState()
 
         /**
          * A connection has been made to a neighbor and this device may send a message.
          * This state is followed by [Sending] or [Failure].
+         *
+         * @param neighborId the neighbor's ID, which is not meant for human readability
+         * @param neighborName the neighbor's human-readable name
          */
         class ReadyToSend(val neighborId: String, val neighborName: String?) : ConnectionState()
 
         /**
          * A message is being sent from this device. This state is followed by [ReadyToSend] or
          * [Failure].
+         *
+         * @param neighborId the neighbor's ID, which is not meant for human readability
+         * @param neighborName the neighbor's human-readable name
+         * @param payloadId the ID of the message that was sent, which will appear again
+         *   in [NearbyConnectionObserver.onMessageDelivered]
          */
         class Sending(val neighborId: String, val neighborName: String?, val payloadId: Long) : ConnectionState()
 
@@ -156,25 +157,28 @@ class NearbyConnection(
         class Failure(val message: String) : ConnectionState()
     }
 
-    private var connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
-
     // The is mutated only in updateState(), which can be called from both the main thread and in
     // callbacks so is synchronized.
-    private lateinit var connectionState: ConnectionState
+    private var connectionState: ConnectionState = ConnectionState.Isolated
+
+    override fun register(observer: NearbyConnectionObserver) {
+        delegate.register(observer)
+        observer.onStateUpdated(connectionState)
+    }
 
     // This method is called from both the main thread and callbacks.
     @Synchronized
     private fun updateState(cs: ConnectionState) {
         connectionState = cs
-        listener?.updateState(cs)
+        notifyObservers { onStateUpdated(cs) }
     }
 
     /**
      * Starts advertising this device. After calling this, the state will be updated to
      * [ConnectionState.Advertising] or [ConnectionState.Failure]. If all goes well, eventually
-     * the state will be updated to [ConnectionState.Authenticating] (if [authenticate] is true)
-     * or [ConnectionState.Connecting]. A client should call either [startAdvertising] or
-     * [startDiscovering] to make a connection, not both.
+     * the state will be updated to [ConnectionState.Authenticating]. A client should call either
+     * [startAdvertising] or [startDiscovering] to make a connection, not both. To initiate a
+     * connection, one device must call [startAdvertising] and the other [startDiscovering].
      */
     fun startAdvertising() {
         connectionsClient.startAdvertising(
@@ -192,9 +196,10 @@ class NearbyConnection(
     /**
      * Starts trying to discover nearby advertising devices. After calling this, the state will
      * be updated to [ConnectionState.Discovering] or [ConnectionState.Failure]. If all goes well,
-     * eventually the state will be updated to [ConnectionState.Authenticating] (if [authenticate]
-     * is true) or [ConnectionState.Connecting]. A client should call either [startAdvertising] or
-     * [startDiscovering] to make a connection, not both.
+     * eventually the state will be updated to [ConnectionState.Authenticating]. A client should
+     * call either [startAdvertising] or [startDiscovering] to make a connection, not both. To
+     * initiate a connection, one device must call [startAdvertising] and the other
+     * [startDiscovering].
      */
     fun startDiscovering() {
         connectionsClient.startDiscovery(
@@ -224,19 +229,14 @@ class NearbyConnection(
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             // This is the last time we have access to the endpoint name, so cache it.
             endpointIdsToNames.put(endpointId, connectionInfo.endpointName)
-            if (authenticate) {
-                updateState(
-                    ConnectionState.Authenticating(
-                        this@NearbyConnection,
-                        endpointId,
-                        connectionInfo.endpointName,
-                        connectionInfo.authenticationToken
-                    )
+            updateState(
+                ConnectionState.Authenticating(
+                    this@NearbyConnection,
+                    endpointId,
+                    connectionInfo.endpointName,
+                    connectionInfo.authenticationToken
                 )
-            } else {
-                connectionsClient.acceptConnection(endpointId, payloadCallback)
-                updateState(ConnectionState.Connecting(endpointId, connectionInfo.endpointName))
-            }
+            )
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
@@ -258,24 +258,19 @@ class NearbyConnection(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            listener?.receiveMessage(
-                endpointId,
-                endpointIdsToNames[endpointId],
-                String(
-                    when (payload.getType()) {
-                        Payload.Type.BYTES -> payload.asBytes()!!
-                        Payload.Type.STREAM -> payload.asStream()!!.asInputStream().toString().toByteArray(PAYLOAD_ENCODING)
-                        Payload.Type.FILE -> ByteArray(0)
-                        // The Payload API guarantees it will be one of the above 3 options.
-                        else -> ByteArray(0)},
-                    PAYLOAD_ENCODING))
+            notifyObservers {
+                onMessageReceived(
+                    endpointId,
+                    endpointIdsToNames[endpointId],
+                    payload.asBytes()?.let { String(it, UTF_8) } ?: "")
+            }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             // Make sure it's reporting on our outgoing message, not an incoming one.
             if (update.status == Status.SUCCESS &&
                 (connectionState as? ConnectionState.Sending)?.payloadId == update.payloadId) {
-                listener?.messageDelivered(update.payloadId)
+                notifyObservers { onMessageDelivered(update.payloadId) }
                 updateState(ConnectionState.ReadyToSend(
                     endpointId,
                     endpointIdsToNames[endpointId]))
@@ -289,7 +284,7 @@ class NearbyConnection(
      *
      * @param message the message to send
      * @return an id that will be later passed back through
-     *   [NearbyConnectionListener.messageDelivered], or null if the message could not be sent
+     *   [NearbyConnectionObserver.onMessageDelivered], or null if the message could not be sent
      */
     fun sendMessage(message: String): Long? {
         val state = connectionState
@@ -315,7 +310,9 @@ class NearbyConnection(
 
     /**
      * Breaks any connections to neighboring devices. This also stops advertising and
-     * discovering. The state will be updated to [ConnectionState.Isolated].
+     * discovering. The state will be updated to [ConnectionState.Isolated]. It is
+     * important to call this when the connection is no longer needed because of
+     * a [leak in the GATT client](http://bit.ly/33VP1gn).
      */
     fun disconnect() {
         connectionsClient.stopAllEndpoints() // also stops advertising and discovery
@@ -350,16 +347,16 @@ class NearbyConnection(
 }
 
 /**
- * Interface definition for listening to changes in a [NearbyConnection].
+ * Interface definition for observing changes in a [NearbyConnection].
  */
-interface NearbyConnectionListener {
+interface NearbyConnectionObserver {
     /**
      * Called whenever the connection's state is set. In the absence of failures, the
      * new state should differ from the prior state, but that is not guaranteed.
      *
      * @param connectionState the current state
      */
-    fun updateState(connectionState: NearbyConnection.ConnectionState)
+    fun onStateUpdated(connectionState: NearbyConnection.ConnectionState)
 
     /**
      * Called when a message is received from a neighboring device.
@@ -368,10 +365,10 @@ interface NearbyConnectionListener {
      * @param neighborName the name of the neighboring device
      * @param message the message
      */
-    fun receiveMessage(neighborId: String, neighborName: String?, message: String)
+    fun onMessageReceived(neighborId: String, neighborName: String?, message: String)
 
     /**
      * Called when a message has been successfully delivered to a neighboring device.
      */
-    fun messageDelivered(payloadId: Long)
+    fun onMessageDelivered(payloadId: Long)
 }

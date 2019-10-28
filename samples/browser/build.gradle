@@ -92,6 +92,7 @@ dependencies {
     implementation project(':feature-toolbar')
     implementation project(':feature-tabs')
     implementation project(':feature-prompts')
+    implementation project(':feature-privatemode')
     implementation project(':feature-pwa')
     implementation project(':feature-p2p')
     implementation project(':feature-findinpage')

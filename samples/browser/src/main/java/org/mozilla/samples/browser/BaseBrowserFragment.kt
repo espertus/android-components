@@ -19,6 +19,7 @@ import mozilla.components.feature.contextmenu.ContextMenuCandidate
 import mozilla.components.feature.contextmenu.ContextMenuFeature
 import mozilla.components.feature.downloads.DownloadsFeature
 import mozilla.components.feature.downloads.manager.FetchDownloadManager
+import mozilla.components.feature.privatemode.feature.SecureWindowFeature
 import mozilla.components.feature.prompts.PromptFeature
 import mozilla.components.feature.session.CoordinateScrollingFeature
 import mozilla.components.feature.session.SessionFeature
@@ -61,7 +62,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler {
         Logger.error("In BaseBrowserFragment.onCreateView()")
         val layout = inflater.inflate(R.layout.fragment_browser, container, false)
 
-        layout.toolbar.setMenuBuilder(components.menuBuilder)
+        layout.toolbar.display.menuBuilder = components.menuBuilder
 
         sessionFeature.set(
             feature = SessionFeature(
@@ -141,7 +142,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler {
             feature = PromptFeature(
                 fragment = this,
                 store = components.store,
-                sessionId = sessionId,
+                customTabId = sessionId,
                 fragmentManager = requireFragmentManager(),
                 onNeedToRequestPermissions = { permissions ->
                     requestPermissions(permissions, REQUEST_CODE_PROMPT_PERMISSIONS)
@@ -183,12 +184,19 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler {
 
         val p2pFeature = p2pIntegration.get()!!.feature
 
+        val secureWindowFeature = SecureWindowFeature(
+            window = requireActivity().window,
+            store = components.store,
+            customTabId = sessionId
+        )
+
         // Observe the lifecycle for supported features
         lifecycle.addObservers(
             scrollFeature,
             contextMenuFeature,
             menuUpdaterFeature,
-            p2pFeature
+            p2pFeature,
+            secureWindowFeature
         )
 
         appLinksFeature.set(
