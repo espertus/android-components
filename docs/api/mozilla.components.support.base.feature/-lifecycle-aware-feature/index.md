@@ -13,6 +13,12 @@ An interface for all entry points to feature components to implement in order to
 | [start](start.md) | `abstract fun start(): `[`Unit`](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-unit/index.html) |
 | [stop](stop.md) | `abstract fun stop(): `[`Unit`](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-unit/index.html) |
 
+### Extension Functions
+
+| Name | Summary |
+|---|---|
+| [loadResourceAsString](../../mozilla.components.support.test.file/kotlin.-any/load-resource-as-string.md) | `fun `[`Any`](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html)`.loadResourceAsString(path: `[`String`](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html)`): `[`String`](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html)<br>Loads a file from the resources folder and returns its content as a string object. |
+
 ### Inheritors
 
 | Name | Summary |
@@ -37,4 +43,4 @@ An interface for all entry points to feature components to implement in order to
 | [ThumbnailsFeature](../../mozilla.components.feature.session/-thumbnails-feature/index.md) | `class ThumbnailsFeature : `[`LifecycleAwareFeature`](./index.md)<br>Feature implementation for automatically taking thumbnails of sites. The feature will take a screenshot when the page finishes loading, and will add it to the [Session.thumbnail](../../mozilla.components.browser.session/-session/thumbnail.md) property. |
 | [ToolbarFeature](../../mozilla.components.feature.toolbar/-toolbar-feature/index.md) | `class ToolbarFeature : `[`LifecycleAwareFeature`](./index.md)`, `[`BackHandler`](../-back-handler/index.md)<br>Feature implementation for connecting a toolbar implementation with the session module. |
 | [WebAppHideToolbarFeature](../../mozilla.components.feature.pwa.feature/-web-app-hide-toolbar-feature/index.md) | `class WebAppHideToolbarFeature : `[`Observer`](../../mozilla.components.browser.session/-session/-observer/index.md)`, `[`LifecycleAwareFeature`](./index.md)<br>Hides a custom tab toolbar for Progressive Web Apps and Trusted Web Activities. |
-| [WindowFeature](../../mozilla.components.feature.session/-window-feature/index.md) | `class WindowFeature : `[`LifecycleAwareFeature`](./index.md)<br>Feature implementation for handling window requests. |
+| [WindowFeature](../../mozilla.components.feature.tabs/-window-feature/index.md) | `class WindowFeature : `[`LifecycleAwareFeature`](./index.md)<br>Feature implementation for handling window requests by opening and closing tabs. |

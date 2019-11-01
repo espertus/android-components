@@ -12,6 +12,37 @@ permalink: /changelog/
 * [Gecko](https://github.com/mozilla-mobile/android-components/blob/master/buildSrc/src/main/java/Gecko.kt)
 * [Configuration](https://github.com/mozilla-mobile/android-components/blob/master/buildSrc/src/main/java/Config.kt)
 
+* **browser-session**, **feature-customtabs**, **feature-session**, **feature-tabs**
+  *  ⚠️ **This is a breaking change**: The `WindowFeature` and `CustomTabWindowFeature` components have been migrated to `browser-state` from `browser-session`. Therefore creating these features now requires a `BrowserStore` instance (instead of a `SessionManager` instance). The `windowRequest` properties have been removed `Session` so window requests can now only be observed on a `BrowserStore` from the `browser-state` component. In addition, `WindowFeature` was moved from `feature-session` to `feature-tabs` because it now makes use of our `TabsUseCases` and this would otherwise cause a dependency cycle.
+
+* **feature-downloads**
+  * Added ability to pause, resume, cancel, and try again on a download through the `DownloadNotification`.
+  * Added support for multiple, continuous downloads.
+  * Added size of the file to the `DownloadNotification`.
+  * Added open file funcitonality to the `DownloadNotification`.
+      * Note: you must add a `FileProvider` to your manifest as well as `file_paths.xml`. See SampleBrowser for an example.
+      * To open .apk files, you must still add the permisison `android.permission.INSTALL_PACKAGES` to your manifest.
+  * Improved visuals of `SimpleDownloadDialogFragment` to better match `SitePermissionsDialogFragment`.
+      * `SimpleDownloadDialogFragment` can similarly be themed by using `PromptsStyling` properties.
+
+* **feature-webnotifications**
+  * Adds feature implementation for configuring and displaying web notifications to the user
+  *
+  * ```Kotlin
+  * WebNotificationFeature(
+  *     applicationContext, engine, icons, R.mipmap.ic_launcher, BrowserActivity::class.java
+  * )
+  * ```
+
+* **service-glean**
+   * Bumped the Glean SDK version to 19.1.0. This fixes a startup crash on Android SDK 22 devices due to missing `stderr`.
+
+* **concept-engine**
+  * Adds support for WebPush abstraction to the Engine.
+  
+* **support-webextensions**
+  * Adds support for sending messages to background pages and scripts in WebExtensions.
+
 # 19.0.0
 
 * [Commits](https://github.com/mozilla-mobile/android-components/compare/v18.0.0...v19.0.0)
@@ -48,7 +79,7 @@ permalink: /changelog/
 
 * **feature-push**
   * The `AutoPushFeature` now checks (once every 24 hours) to verify and renew push subscriptions if expired after a cold boot.
-  
+
 # 18.0.0
 
 * [Commits](https://github.com/mozilla-mobile/android-components/compare/v17.0.0...v18.0.0)
