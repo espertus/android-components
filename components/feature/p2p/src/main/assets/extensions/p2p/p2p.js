@@ -5,7 +5,9 @@
 /*
 Establish communication with native application.
 */
-let port = browser.runtime.connectNative("p2p");
+let port = browser.runtime.connectNative("mozacP2P");
+
+port.postMessage("Hello from P2P extension");
 
 port.onMessage.addListener((event) => {
   console.log("Hooray! A message arrived for me!")

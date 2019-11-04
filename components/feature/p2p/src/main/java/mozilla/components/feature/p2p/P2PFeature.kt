@@ -117,6 +117,7 @@ class P2PFeature(
         val engineSession = sessionManager.getOrCreateEngineSession(session)
         val messageHandler = P2PContentMessageHandler(session)
         extensionController.registerContentMessageHandler(engineSession, messageHandler)
+        extensionController.registerBackgroundMessageHandler(messageHandler)
     }
 
     private inner class P2PContentMessageHandler(
