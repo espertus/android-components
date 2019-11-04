@@ -120,4 +120,7 @@ internal class P2PController(
         // There's a bug in loadData() that makes it necessary to use base64 encoding.
         sessionUseCases.loadData(data, mimeType, "base64")
     }
+
+    /// New stuff
+
 }

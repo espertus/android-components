@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.CallSuper
 import kotlinx.android.synthetic.main.fragment_browser.view.*
 import mozilla.components.feature.awesomebar.AwesomeBarFeature
 import mozilla.components.feature.awesomebar.provider.SearchSuggestionProvider
@@ -17,7 +18,9 @@ import mozilla.components.feature.tabs.toolbar.TabsToolbarFeature
 import mozilla.components.feature.toolbar.ToolbarAutocompleteFeature
 import mozilla.components.support.base.feature.BackHandler
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
+import mozilla.components.support.ktx.android.arch.lifecycle.addObservers
 import org.mozilla.samples.browser.ext.components
+import org.mozilla.samples.browser.integration.P2PIntegration
 import org.mozilla.samples.browser.integration.ReaderViewIntegration
 
 /**
@@ -26,6 +29,8 @@ import org.mozilla.samples.browser.integration.ReaderViewIntegration
 class BrowserFragment : BaseBrowserFragment(), BackHandler {
     private val thumbnailsFeature = ViewBoundFeatureWrapper<ThumbnailsFeature>()
     private val readerViewFeature = ViewBoundFeatureWrapper<ReaderViewIntegration>()
+    private val p2pIntegration = ViewBoundFeatureWrapper<P2PIntegration>()
+
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val layout = super.onCreateView(inflater, container, savedInstanceState)
@@ -63,6 +68,25 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
             view = layout
         )
 
+
+        p2pIntegration.set(
+            feature = P2PIntegration(
+                store = components.store,
+                engine = components.engine,
+                view = layout.p2p,
+                thunk = { -> components.nearbyConnection },
+                sessionManager = components.sessionManager,
+                tabsUseCases = components.tabsUseCases,
+                sessionUseCases = components.sessionUseCases
+            ) { permissions ->
+                requestPermissions(permissions, REQUEST_CODE_P2P_PERMISSIONS)
+            },
+            owner = this,
+            view = layout
+        )
+
+        val p2pFeature = p2pIntegration.get()!!.feature
+
         thumbnailsFeature.set(
             feature = ThumbnailsFeature(requireContext(), layout.engineView, components.sessionManager),
             owner = this,
@@ -70,7 +94,7 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
         )
 
         val windowFeature = WindowFeature(components.store, components.tabsUseCases)
-        lifecycle.addObserver(windowFeature)
+        lifecycle.addObservers(windowFeature, p2pFeature)
 
         return layout
     }
@@ -87,7 +111,17 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
     override fun onBackPressed(): Boolean =
         readerViewFeature.onBackPressed() || super.onBackPressed()
 
+    @CallSuper
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        if (requestCode == REQUEST_CODE_P2P_PERMISSIONS) {
+            p2pIntegration.get()!!.feature.onPermissionsResult(permissions, grantResults)
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
     companion object {
+        private const val REQUEST_CODE_P2P_PERMISSIONS = 4
+
         fun create(sessionId: String? = null) = BrowserFragment().apply {
             arguments = Bundle().apply {
                 putSessionId(sessionId)
@@ -95,3 +129,4 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
         }
     }
 }
+

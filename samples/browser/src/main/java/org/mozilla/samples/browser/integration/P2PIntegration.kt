@@ -5,7 +5,9 @@ package org.mozilla.samples.browser.integration
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import android.view.View
+import mozilla.components.browser.session.SessionManager
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.concept.engine.Engine
 import mozilla.components.feature.p2p.P2PFeature
 import mozilla.components.feature.p2p.view.P2PView
 import mozilla.components.feature.session.SessionUseCases
@@ -14,32 +16,35 @@ import mozilla.components.lib.nearby.NearbyConnection
 import mozilla.components.support.base.feature.BackHandler
 import mozilla.components.support.base.feature.LifecycleAwareFeature
 import mozilla.components.support.base.feature.OnNeedToRequestPermissions
-import mozilla.components.support.base.log.logger.Logger
 
 class P2PIntegration(
     private val store: BrowserStore,
+    private val engine: Engine,
     private val view: P2PView,
     private val thunk: () -> NearbyConnection,
     private val tabsUseCases: TabsUseCases,
+    private val sessionManager: SessionManager,
     private val sessionUseCases: SessionUseCases,
     onNeedToRequestPermissions: OnNeedToRequestPermissions
 ) : LifecycleAwareFeature, BackHandler {
     val feature = P2PFeature(
         view,
         store,
+        engine,
         thunk,
         tabsUseCases,
         sessionUseCases,
+        sessionManager,
         onNeedToRequestPermissions,
         ::onClose
     )
     override fun start() {
-        feature.start()
+        //feature.start()
         launch = this::launch
     }
 
     override fun stop() {
-        feature.stop()
+        //feature.stop()
         launch = null
     }
 

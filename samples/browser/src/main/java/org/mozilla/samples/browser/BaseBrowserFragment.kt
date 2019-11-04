@@ -168,22 +168,6 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler {
             owner = this,
             view = layout)
 
-        p2pIntegration.set(
-            feature = P2PIntegration(
-                store = components.store,
-                view = layout.p2p,
-                thunk = { -> components.nearbyConnection },
-                tabsUseCases = components.tabsUseCases,
-                sessionUseCases = components.sessionUseCases
-            ) { permissions ->
-                requestPermissions(permissions, REQUEST_CODE_P2P_PERMISSIONS)
-            },
-            owner = this,
-            view = layout
-        )
-
-        val p2pFeature = p2pIntegration.get()!!.feature
-
         val secureWindowFeature = SecureWindowFeature(
             window = requireActivity().window,
             store = components.store,
@@ -195,7 +179,6 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler {
             scrollFeature,
             contextMenuFeature,
             menuUpdaterFeature,
-            p2pFeature,
             secureWindowFeature
         )
 
