@@ -6,7 +6,6 @@
     {
       "matches": ["*://*/*"],
       "js": ["p2p.js"],
-      "css": ["readerview.css"],
       "run_at": "document_idle"
     }
   ],
