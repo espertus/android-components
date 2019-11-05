@@ -11,7 +11,9 @@ console.log(`I have a port: ${port}`);
 port.postMessage("Hello from P2P extension");
 
 port.onMessage.addListener((event) => {
-  console.log("Hooray! A message arrived for me!")
+  console.log("Hooray! A message arrived for me!");
+  console.log("I will tell the back end the title of this page: ${document.title}");
+  port.postMessage(document.title)
 });
 
 port.onDisconnect.addListener((p) => {
