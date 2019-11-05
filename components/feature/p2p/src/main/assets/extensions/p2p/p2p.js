@@ -12,13 +12,15 @@ port.postMessage("Hello from P2P extension");
 
 port.onMessage.addListener((event) => {
   console.log("Hooray! A message arrived for me!");
-  console.log("I will tell the back end the title of this page: ${document.title}");
-  port.postMessage(document.title)
+  port.postMessage("Front end acks your message.");
+  port.postMessage(`Title of current page is ${document.title}`)
 });
 
 port.onDisconnect.addListener((p) => {
   if (p.error) {
     console.log(`Wah! Disconnected due to an error: ${p.error.message}`);
+  } else {
+    console.log("Disconnected properly")
   }
 });
 
