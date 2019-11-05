@@ -14,6 +14,7 @@ import mozilla.components.lib.nearby.NearbyConnection
 import mozilla.components.lib.nearby.NearbyConnection.ConnectionState
 import mozilla.components.lib.nearby.NearbyConnectionObserver
 import mozilla.components.support.base.log.logger.Logger
+import org.json.JSONObject
 
 /**
  * Controller that mediates between [P2PView] and [NearbyConnection].
@@ -27,8 +28,10 @@ internal class P2PController(
 ) : P2PView.Listener {
     private lateinit var nearbyConnection: NearbyConnection
     private var savedConnectionState: ConnectionState? = null
+    private var sendMessage: ((JSONObject) -> Unit)? = null
 
-    fun start() {
+    fun start(sender: ((JSONObject) -> Unit)? = null) {
+        sendMessage = sender
         view.listener = this
         nearbyConnection = thunk()
         nearbyConnection.register(
@@ -67,6 +70,9 @@ internal class P2PController(
 
     override fun onAdvertise() {
         nearbyConnection.startAdvertising()
+        val json = JSONObject()
+        json.put("message", "I'm starting advertising")
+        sendMessage?.invoke(json)
     }
 
     override fun onDiscover() {
@@ -121,6 +127,6 @@ internal class P2PController(
         sessionUseCases.loadData(data, mimeType, "base64")
     }
 
-    /// New stuff
+    // New stuff
 
 }

@@ -33,12 +33,12 @@ import mozilla.components.support.webextensions.WebExtensionController
  * Feature implementation for peer-to-peer communication between browsers.
  */
 class P2PFeature(
-    val view: P2PView,
-    private val store: BrowserStore,
+    view: P2PView,
+    store: BrowserStore,
     private val engine: Engine,
-    private val thunk: () -> NearbyConnection,
-    private val tabsUseCases: TabsUseCases,
-    private val sessionUseCases: SessionUseCases,
+    thunk: () -> NearbyConnection,
+    tabsUseCases: TabsUseCases,
+    sessionUseCases: SessionUseCases,
     private val sessionManager: SessionManager,
     override val onNeedToRequestPermissions: OnNeedToRequestPermissions,
     private val onClose: (() -> Unit)
@@ -105,7 +105,15 @@ class P2PFeature(
         registerP2PContentMessageHandler()
 
         extensionController.install(engine)
-        controller.start()
+        controller.start { j ->
+            activeSession?.let {
+                logger.error("I'm sending this message: ${j["message"]}")
+                extensionController.sendContentMessage(
+                    j,
+                    sessionManager.getOrCreateEngineSession(it)
+                )
+            }
+        }
     }
 
     @VisibleForTesting
@@ -117,27 +125,49 @@ class P2PFeature(
         val engineSession = sessionManager.getOrCreateEngineSession(session)
         val messageHandler = P2PContentMessageHandler(session)
         extensionController.registerContentMessageHandler(engineSession, messageHandler)
-        extensionController.registerBackgroundMessageHandler(messageHandler)
+        extensionController.registerBackgroundMessageHandler(P2PBackgroundtMessageHandler(session))
     }
 
     private inner class P2PContentMessageHandler(
         private val session: Session
     ) : MessageHandler {
         override fun onPortConnected(port: Port) {
-            logger.error("P2P port is connected!")
+            logger.error("P2PC port is connected!")
         }
 
         override fun onPortMessage(message: Any, port: Port) {
-            logger.error("P2P receives a port message: $message")
+            logger.error("P2PC receives a port message: $message")
         }
 
         override fun onMessage(message: Any, source: EngineSession?): Any? {
-            logger.error("P2P receives a message: $message")
+            logger.error("P2PC receives a message: $message")
             return super.onMessage(message, source)
         }
 
         override fun onPortDisconnected(port: Port) {
-            logger.error("P2P receives a port disconnect")
+            logger.error("P2PC receives a port disconnect")
+            super.onPortDisconnected(port)
+        }
+    }
+
+    private inner class P2PBackgroundtMessageHandler(
+        private val session: Session
+    ) : MessageHandler {
+        override fun onPortConnected(port: Port) {
+            logger.error("P2PB port is connected!")
+        }
+
+        override fun onPortMessage(message: Any, port: Port) {
+            logger.error("P2PB receives a port message: $message")
+        }
+
+        override fun onMessage(message: Any, source: EngineSession?): Any? {
+            logger.error("P2PB receives a message: $message")
+            return super.onMessage(message, source)
+        }
+
+        override fun onPortDisconnected(port: Port) {
+            logger.error("P2PB receives a port disconnect")
             super.onPortDisconnected(port)
         }
     }
