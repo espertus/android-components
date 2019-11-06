@@ -6,19 +6,24 @@
 Establish communication with native application.
 */
 let port = browser.runtime.connectNative("mozacP2P");
-console.log(`I have a port: ${port}`);
+console.log("I have a port: ${port}");
 
 port.postMessage("Hello from P2P extension");
 
-port.onMessage.addListener((event) => {
+port.onMessage.addListener((message) => {
   console.log("Hooray! A message arrived for me!");
-  port.postMessage("Front end acks your message.");
-  port.postMessage(`Title of current page is ${document.title}`)
-});
+    switch (message.action) {
+      case 'get_html':
+        port.postMessage(document.documentElement.innerHTML)
+        break;
+      default:
+        console.log("I do not know how to handle this action: ${message.action}")
+    }
+})
 
 port.onDisconnect.addListener((p) => {
   if (p.error) {
-    console.log(`Wah! Disconnected due to an error: ${p.error.message}`);
+    console.log("Wah! Disconnected due to an error: ${p.error.message}");
   } else {
     console.log("Disconnected properly")
   }

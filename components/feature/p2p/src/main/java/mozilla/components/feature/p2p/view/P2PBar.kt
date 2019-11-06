@@ -5,18 +5,14 @@
 package mozilla.components.feature.p2p.view
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.util.AttributeSet
-import android.util.TypedValue.COMPLEX_UNIT_PX
 import android.view.View
-import android.widget.TextView
+import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.AppCompatImageButton
 import androidx.constraintlayout.widget.ConstraintLayout
 import kotlinx.android.synthetic.main.mozac_feature_p2p_view.view.*
 import mozilla.components.feature.p2p.R
-import mozilla.components.support.base.log.logger.Logger
 
 private const val DEFAULT_VALUE = 0
 
@@ -44,10 +40,15 @@ class P2PBar @JvmOverloads constructor(
             listener?.onDiscover()
             showConnectButtons(false)
         }
-        p2pSendBtn.setOnClickListener {
+        p2pSendUrlBtn.setOnClickListener {
             require(listener != null)
             listener?.onSendUrl()
-            p2pSendBtn.isEnabled = false
+            // p2pSendUrlBtn.isEnabled = false
+        }
+        p2pSendPageBtn.setOnClickListener {
+            require(listener != null)
+            listener?.onSendPage()
+            // p2pSendPageBtn.isEnabled = false
         }
         p2pResetBtn.setOnClickListener {
             require(listener != null)
@@ -56,12 +57,21 @@ class P2PBar @JvmOverloads constructor(
         }
     }
 
+    private fun showButton(btn: Button, b: Boolean) {
+        btn.visibility = if (b) View.VISIBLE else View.GONE
+        btn.isEnabled = b
+    }
+
     private fun showConnectButtons(b: Boolean) {
         // Either the advertise and discover buttons are visible and enabled, or the reset button is.
-        val connectButtonVis = if (b) View.VISIBLE else View.GONE
-        p2pAdvertiseBtn.visibility = connectButtonVis
-        p2pDiscoverBtn.visibility = connectButtonVis
-        p2pResetBtn.visibility = if (b) View.GONE else View.VISIBLE
+        showButton(p2pAdvertiseBtn, b)
+        showButton(p2pDiscoverBtn, b)
+        showButton(p2pResetBtn, !b)
+    }
+
+    private fun showSendButtons(b: Boolean = true) {
+        showButton(p2pSendUrlBtn, b)
+        showButton(p2pSendPageBtn, b)
     }
 
     override fun updateStatus(status: String) {
@@ -81,20 +91,57 @@ class P2PBar @JvmOverloads constructor(
 
     override fun readyToSend() {
         require(listener != null)
-        p2pSendBtn.visibility = View.VISIBLE
-        p2pSendBtn.isEnabled = true
+        showSendButtons(true)
         showConnectButtons(false)
     }
 
     override fun receiveUrl(neighborId: String, neighborName: String?, url: String) {
         AlertDialog.Builder(context)
-            .setTitle(context.getString(R.string.mozac_feature_p2p_open_url_title, neighborName
-                ?: neighborId))
+            .setTitle(
+                context.getString(
+                    R.string.mozac_feature_p2p_open_url_title, neighborName
+                        ?: neighborId
+                )
+            )
             .setMessage(url)
-            .setPositiveButton(context.getString(R.string.mozac_feature_p2p_open_in_current_tab)) {
-                _, _ -> listener?.onSetUrl(url, newTab = false) }
-            .setNeutralButton(context.getString(R.string.mozac_feature_p2p_open_in_new_tab)) {
-                _, _ -> listener?.onSetUrl(url, newTab = true) }
+            .setPositiveButton(context.getString(R.string.mozac_feature_p2p_open_in_current_tab)) { _, _ ->
+                listener?.onSetUrl(
+                    url,
+                    newTab = false
+                )
+            }
+            .setNeutralButton(context.getString(R.string.mozac_feature_p2p_open_in_new_tab)) { _, _ ->
+                listener?.onSetUrl(
+                    url,
+                    newTab = true
+                )
+            }
+            .setNegativeButton(android.R.string.no) { _, _ -> }
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .show()
+    }
+
+    override fun receivePage(neighborId: String, neighborName: String?, page: String) {
+        AlertDialog.Builder(context)
+            .setTitle(
+                context.getString(
+                    R.string.mozac_feature_p2p_open_page_title, neighborName
+                        ?: neighborId
+                )
+            )
+            .setMessage("Tab choice is ignored.")
+            .setPositiveButton(context.getString(R.string.mozac_feature_p2p_open_in_current_tab)) { _, _ ->
+                listener?.onLoadData(
+                    page,
+                    "text/html"
+                )
+            }
+            .setNeutralButton(context.getString(R.string.mozac_feature_p2p_open_in_new_tab)) { _, _ ->
+                listener?.onLoadData(
+                    page,
+                    "text/html"
+                )
+            }
             .setNegativeButton(android.R.string.no) { _, _ -> }
             .setIcon(android.R.drawable.ic_dialog_alert)
             .show()
@@ -106,39 +153,6 @@ class P2PBar @JvmOverloads constructor(
 
     override fun clear() {
         showConnectButtons(true)
-        p2pSendBtn.visibility = View.GONE
+        showSendButtons(false)
     }
-}
-
-internal data class P2PBarStyling(
-    val queryTextColor: Int,
-    val queryHintTextColor: Int,
-    val queryTextSize: Int,
-    val resultCountTextColor: Int,
-    val resultNoMatchesTextColor: Int,
-    val resultCountTextSize: Int,
-    val buttonsTint: ColorStateList?
-)
-
-private fun TextView.setTextSizeIfNotDefaultValue(newValue: Int) {
-    if (newValue != DEFAULT_VALUE) {
-        setTextSize(COMPLEX_UNIT_PX, newValue.toFloat())
-    }
-}
-
-private fun TextView.setTextColorIfNotDefaultValue(newValue: Int) {
-    if (newValue != DEFAULT_VALUE) {
-        setTextColor(newValue)
-    }
-}
-
-private fun TextView.setHintTextColorIfNotDefaultValue(newValue: Int) {
-    if (newValue != DEFAULT_VALUE) {
-        setHintTextColor(newValue)
-    }
-}
-
-private fun AppCompatImageButton.setIconTintIfNotDefaultValue(newValue: ColorStateList?) {
-    val safeValue = newValue ?: return
-    imageTintList = safeValue
 }

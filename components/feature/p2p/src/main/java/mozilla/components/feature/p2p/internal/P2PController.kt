@@ -6,6 +6,7 @@ package mozilla.components.feature.p2p.internal
 
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.feature.p2p.P2PFeature
 import mozilla.components.feature.p2p.view.P2PBar
 import mozilla.components.feature.p2p.view.P2PView
 import mozilla.components.feature.session.SessionUseCases
@@ -14,7 +15,6 @@ import mozilla.components.lib.nearby.NearbyConnection
 import mozilla.components.lib.nearby.NearbyConnection.ConnectionState
 import mozilla.components.lib.nearby.NearbyConnectionObserver
 import mozilla.components.support.base.log.logger.Logger
-import org.json.JSONObject
 
 /**
  * Controller that mediates between [P2PView] and [NearbyConnection].
@@ -24,14 +24,13 @@ internal class P2PController(
     private val thunk: () -> NearbyConnection,
     private val view: P2PView,
     private val tabsUseCases: TabsUseCases,
-    private val sessionUseCases: SessionUseCases
+    private val sessionUseCases: SessionUseCases,
+    private val sender: P2PFeature.P2PFeatureSender
 ) : P2PView.Listener {
     private lateinit var nearbyConnection: NearbyConnection
     private var savedConnectionState: ConnectionState? = null
-    private var sendMessage: ((JSONObject) -> Unit)? = null
 
-    fun start(sender: ((JSONObject) -> Unit)? = null) {
-        sendMessage = sender
+    fun start() {
         view.listener = this
         nearbyConnection = thunk()
         nearbyConnection.register(
@@ -56,7 +55,12 @@ internal class P2PController(
                 }
 
                 override fun onMessageReceived(neighborId: String, neighborName: String?, message: String) {
-                    view.receiveUrl(neighborId, neighborName, message)
+                    // This is a hack.
+                    if (message.startsWith("http")) {
+                        view.receiveUrl(neighborId, neighborName, message)
+                    } else {
+                        view.receivePage(neighborId, neighborName, message)
+                    }
                 }
             },
             // I need to do this cast to get an object that extends View
@@ -65,19 +69,6 @@ internal class P2PController(
     }
 
     fun stop() {}
-
-    // P2PView.Listener implementation
-
-    override fun onAdvertise() {
-        nearbyConnection.startAdvertising()
-        val json = JSONObject()
-        json.put("message", "I'm starting advertising")
-        sendMessage?.invoke(json)
-    }
-
-    override fun onDiscover() {
-        nearbyConnection.startDiscovering()
-    }
 
     @Synchronized
     private fun reportError(msg: String) {
@@ -91,6 +82,16 @@ internal class P2PController(
                 reportError("savedConnection was expected to be type ${T::class} but is $savedConnectionState")
             }
         }
+
+    // P2PView.Listener implementation
+
+    override fun onAdvertise() {
+        nearbyConnection.startAdvertising()
+    }
+
+    override fun onDiscover() {
+        nearbyConnection.startDiscovering()
+    }
 
     override fun onAccept(token: String) {
         cast<ConnectionState.Authenticating>()?.accept()
@@ -122,11 +123,25 @@ internal class P2PController(
         }
     }
 
+    override fun onSendPage() {
+        if (cast<ConnectionState.ReadyToSend>() != null) {
+            sender.requestHtml()
+        }
+    }
+
+    fun onPageReadyToSend(page: String) {
+        if (cast<ConnectionState.ReadyToSend>() != null) {
+            val payloadID = nearbyConnection.sendMessage(page)
+            if (payloadID == null) {
+                reportError("Unable to send message: sendMessage() returns null")
+            }
+            return
+        }
+        reportError("Wrong state in onPageReadyToSend()")
+    }
+
     override fun onLoadData(data: String, mimeType: String) {
         // There's a bug in loadData() that makes it necessary to use base64 encoding.
         sessionUseCases.loadData(data, mimeType, "base64")
     }
-
-    // New stuff
-
 }

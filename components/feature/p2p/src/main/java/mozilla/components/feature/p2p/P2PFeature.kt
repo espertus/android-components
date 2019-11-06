@@ -28,6 +28,7 @@ import mozilla.components.support.base.feature.OnNeedToRequestPermissions
 import mozilla.components.support.base.feature.PermissionsFeature
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.webextensions.WebExtensionController
+import org.json.JSONObject
 
 /**
  * Feature implementation for peer-to-peer communication between browsers.
@@ -45,7 +46,7 @@ class P2PFeature(
 ) : SelectionAwareSessionObserver(sessionManager), LifecycleAwareFeature, PermissionsFeature,
     BackHandler {
     @VisibleForTesting
-    internal var controller = P2PController(store, thunk, view, tabsUseCases, sessionUseCases)
+    internal var controller = P2PController(store, thunk, view, tabsUseCases, sessionUseCases, P2PFeatureSender())
 
     private val logger = Logger("P2P")
     private var session: SessionState? = null
@@ -105,15 +106,7 @@ class P2PFeature(
         registerP2PContentMessageHandler()
 
         extensionController.install(engine)
-        controller.start { j ->
-            activeSession?.let {
-                logger.error("I'm sending this message: ${j["message"]}")
-                extensionController.sendContentMessage(
-                    j,
-                    sessionManager.getOrCreateEngineSession(it)
-                )
-            }
-        }
+        controller.start()
     }
 
     @VisibleForTesting
@@ -133,10 +126,17 @@ class P2PFeature(
     ) : MessageHandler {
         override fun onPortConnected(port: Port) {
             logger.error("P2PC port is connected!")
+            super.onPortConnected(port)
         }
 
         override fun onPortMessage(message: Any, port: Port) {
             logger.error("P2PC receives a port message: $message")
+            if (message is String) {
+                controller.onPageReadyToSend(message)
+            } else {
+                logger.error("P2PC message is not a string.")
+            }
+            super.onPortMessage(message, port)
         }
 
         override fun onMessage(message: Any, source: EngineSession?): Any? {
@@ -178,9 +178,32 @@ class P2PFeature(
         return true
     }
 
+    inner class P2PFeatureSender {
+        fun requestHtml() {
+            sendMessage(JSONObject().put(ACTION_MESSAGE_KEY, ACTION_GET_HTML))
+        }
+
+        private fun sendMessage(json: JSONObject) {
+            activeSession?.let {
+                logger.error("I'm sending a ${json[ACTION_MESSAGE_KEY]} message")
+                extensionController.sendContentMessage(
+                    json,
+                    sessionManager.getOrCreateEngineSession(it)
+                )
+            }
+        }
+    }
+
     @VisibleForTesting
     companion object {
         internal const val P2P_EXTENSION_ID = "mozacP2P"
         internal const val P2P_EXTENSION_URL = "resource://android/assets/extensions/p2p/"
+
+        // Constants for building messages sent to the web extension:
+        // TODO
+        const val ACTION_MESSAGE_KEY = "action"
+        const val ACTION_GET_HTML = "get_html"
+
+        const val ACTION_VALUE_KEY = "value"
     }
 }

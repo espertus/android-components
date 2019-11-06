@@ -71,6 +71,8 @@ interface P2PView {
      */
     fun receiveUrl(neighborId: String, neighborName: String?, url: String)
 
+    fun receivePage(neighborId: String, neighborName: String?, page: String)
+
     /**
      * An interface enabling the [P2PView] to make requests of a controller.
      */
@@ -107,6 +109,11 @@ interface P2PView {
         fun onSendUrl()
 
         /**
+         * Handles a request to send the current page to the neighbor.
+         */
+        fun onSendPage()
+
+        /**
          * Handles a request to load the specified URL. This will typically be one sent from a neighbor.
          *
          * @param url the URL
@@ -120,7 +127,7 @@ interface P2PView {
          * @param data the contents of the page
          * @param mimeType the mime type
          */
-        fun onLoadData(data: String, mimeType: String)
+        fun onLoadData(data: String, mimeType: String = "text/html")
 
         /**
          * Resets the connection to the neighbor.

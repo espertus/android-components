@@ -1,8 +1,8 @@
-package org.mozilla.samples.browser.integration
-
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.mozilla.samples.browser.integration
 
 import android.view.View
 import mozilla.components.browser.session.SessionManager
@@ -39,12 +39,10 @@ class P2PIntegration(
         ::onClose
     )
     override fun start() {
-        //feature.start()
         launch = this::launch
     }
 
     override fun stop() {
-        //feature.stop()
         launch = null
     }
 

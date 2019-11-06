@@ -10,10 +10,16 @@
     <string name="mozac_feature_p2p_discover">Discover</string>
 
     <!-- String for button to send URL to neighboring device. -->
-    <string name="mozac_feature_p2p_send">Send URL</string>
+    <string name="mozac_feature_p2p_send_url">Send URL</string>
+
+    <!-- String for button to send page to neighboring device. -->
+    <string name="mozac_feature_p2p_send_page">Send Page</string>
 
     <!-- String for title of AlertDialog to open URL received from neighbor; %1$s will be replaced by the neighbor name -->
     <string name="mozac_feature_p2p_open_url_title">Open URL from %1$s?</string>
+
+    <!-- String for title of AlertDialog to open page received from neighbor; %1$s will be replaced by the neighbor name -->
+    <string name="mozac_feature_p2p_open_page_title">Open page from %1$s?</string>
 
     <!-- String for button to open content in new tab -->
     <string name="mozac_feature_p2p_open_in_new_tab">new tab</string>

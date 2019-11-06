@@ -48,14 +48,25 @@
         tools:layout_editor_absoluteX="131dp" />
 
     <Button
-        android:id="@+id/p2pSendBtn"
+        android:id="@+id/p2pSendUrlBtn"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:enabled="false"
-        android:text="@string/mozac_feature_p2p_send"
-        app:layout_constraintEnd_toStartOf="@+id/p2pStatusText"
+        android:text="@string/mozac_feature_p2p_send_url"
+        app:layout_constraintEnd_toStartOf="@+id/p2pSendPageBtn"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/p2pDiscoverBtn"
+        tools:layout_editor_absoluteX="289dp" />
+
+    <Button
+        android:id="@+id/p2pSendPageBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:enabled="false"
+        android:text="@string/mozac_feature_p2p_send_page"
+        app:layout_constraintEnd_toStartOf="@+id/p2pStatusText"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/p2pSendUrlBtn"
         tools:layout_editor_absoluteX="289dp" />
 
     <TextView

@@ -31,7 +31,6 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
     private val readerViewFeature = ViewBoundFeatureWrapper<ReaderViewIntegration>()
     private val p2pIntegration = ViewBoundFeatureWrapper<P2PIntegration>()
 
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val layout = super.onCreateView(inflater, container, savedInstanceState)
 
@@ -67,7 +66,6 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
             owner = this,
             view = layout
         )
-
 
         p2pIntegration.set(
             feature = P2PIntegration(
@@ -129,4 +127,3 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
         }
     }
 }
-
