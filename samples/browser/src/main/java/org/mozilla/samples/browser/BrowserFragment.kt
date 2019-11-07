@@ -118,7 +118,7 @@ class BrowserFragment : BaseBrowserFragment(), BackHandler {
     }
 
     companion object {
-        private const val REQUEST_CODE_P2P_PERMISSIONS = 4
+        private const val REQUEST_CODE_P2P_PERMISSIONS = MAX_REQUEST_CODE_PERMISSIONS + 1
 
         fun create(sessionId: String? = null) = BrowserFragment().apply {
             arguments = Bundle().apply {

@@ -118,7 +118,7 @@ class P2PFeature(
         val engineSession = sessionManager.getOrCreateEngineSession(session)
         val messageHandler = P2PContentMessageHandler(session)
         extensionController.registerContentMessageHandler(engineSession, messageHandler)
-        extensionController.registerBackgroundMessageHandler(P2PBackgroundtMessageHandler(session))
+        extensionController.registerBackgroundMessageHandler(P2PBackgroundMessageHandler(session))
     }
 
     private inner class P2PContentMessageHandler(
@@ -150,7 +150,7 @@ class P2PFeature(
         }
     }
 
-    private inner class P2PBackgroundtMessageHandler(
+    private inner class P2PBackgroundMessageHandler(
         private val session: Session
     ) : MessageHandler {
         override fun onPortConnected(port: Port) {

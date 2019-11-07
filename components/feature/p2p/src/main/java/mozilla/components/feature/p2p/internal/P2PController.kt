@@ -55,11 +55,16 @@ internal class P2PController(
                 }
 
                 override fun onMessageReceived(neighborId: String, neighborName: String?, message: String) {
-                    // This is a hack.
-                    if (message.startsWith("http")) {
-                        view.receiveUrl(neighborId, neighborName, message)
+                    if (message.length > 1) {
+                        when(message[0]) {
+                            MESSAGE_PREFIX_FOR_HTML -> view.receivePage(
+                                neighborId, neighborName, message.substring(1))
+                            MESSAGE_PREFIX_FOR_URL -> view.receiveUrl(
+                                neighborId, neighborName, message.substring(1))
+                            else -> reportError("Cannot parse incoming message $message")
+                        }
                     } else {
-                        view.receivePage(neighborId, neighborName, message)
+                        reportError("Trivial message received: '$message'")
                     }
                 }
             },
@@ -115,10 +120,12 @@ internal class P2PController(
 
     override fun onSendUrl() {
         if (cast<ConnectionState.ReadyToSend>() != null) {
-            val payloadID = nearbyConnection.sendMessage(store.state.selectedTab?.content?.url
-                ?: "no URL")
-            if (payloadID == null) {
-                reportError("Unable to send message: sendMessage() returns null")
+            store.state.selectedTab?.content?.url?.let {
+                if (nearbyConnection.sendMessage("$MESSAGE_PREFIX_FOR_URL$it") == null) {
+                    reportError("Unable to send message: sendMessage() returns null")
+                }
+            } ?: run {
+                reportError("Unable to get URL to send")
             }
         }
     }
@@ -131,17 +138,20 @@ internal class P2PController(
 
     fun onPageReadyToSend(page: String) {
         if (cast<ConnectionState.ReadyToSend>() != null) {
-            val payloadID = nearbyConnection.sendMessage(page)
-            if (payloadID == null) {
+            if (nearbyConnection.sendMessage("$MESSAGE_PREFIX_FOR_HTML$page") == null) {
                 reportError("Unable to send message: sendMessage() returns null")
             }
             return
         }
-        reportError("Wrong state in onPageReadyToSend()")
     }
 
     override fun onLoadData(data: String, mimeType: String) {
         // There's a bug in loadData() that makes it necessary to use base64 encoding.
         sessionUseCases.loadData(data, mimeType, "base64")
+    }
+
+    companion object {
+        const val MESSAGE_PREFIX_FOR_URL = 'U'
+        const val MESSAGE_PREFIX_FOR_HTML = 'H'
     }
 }
