@@ -258,11 +258,16 @@ class NearbyConnection(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            val message =
+                when(payload.type) {
+                    Payload.Type.BYTES -> payload.asBytes()?.let { String(it, UTF_8) } ?: ""
+                    Payload.Type.STREAM ->
+                        payload.asStream()?.asInputStream()?.bufferedReader()?.readText()
+                            ?: "Error reading incoming message"
+                    else -> "Error reading incoming message"
+                }
             notifyObservers {
-                onMessageReceived(
-                    endpointId,
-                    endpointIdsToNames[endpointId],
-                    payload.asBytes()?.let { String(it, UTF_8) } ?: "")
+                onMessageReceived(endpointId, endpointIdsToNames[endpointId], message)
             }
         }
 
@@ -295,7 +300,7 @@ class NearbyConnection(
                 } else {
                     // Logically, it might make more sense to use Payload.fromFile() since we
                     // know the size of the string, than Payload.fromStream(), but we would
-                    // have to create a file locally to use use the former.
+                    // have to create a file locally to use the former.
                     Payload.fromStream(ByteArrayInputStream(message.toByteArray(PAYLOAD_ENCODING)))
                 }
             connectionsClient.sendPayload(state.neighborId, payload)
