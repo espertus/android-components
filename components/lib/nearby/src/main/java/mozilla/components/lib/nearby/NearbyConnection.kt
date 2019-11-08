@@ -7,6 +7,9 @@ package mozilla.components.lib.nearby
 import android.Manifest
 import android.content.Context
 import android.os.Build
+import android.view.View
+import androidx.annotation.VisibleForTesting
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -50,6 +53,8 @@ class NearbyConnection(
      */
     constructor(context: Context, name: String = Build.MODEL) : this(Nearby.getConnectionsClient(context), name)
 
+    private val logger = Logger("NeabyConnection")
+
     // I assume that the number of endpoints encountered during the lifetime of the application
     // will be small and do not remove them from the map.
     private val endpointIdsToNames = ConcurrentHashMap<String, String>()
@@ -71,21 +76,44 @@ class NearbyConnection(
         object Isolated : ConnectionState()
 
         /**
-         * This device is advertising its presence.
+         * This device is advertising its presence. If it is discovered by another device,
+         * the next state will be [Authenticating].
          */
         object Advertising : ConnectionState()
 
         /**
-         * This device is trying to discover devices that are advertising.
+         * This device is trying to discover devices that are advertising. If it discovers one,
+         * the next state with be [Initiating].
          */
         object Discovering : ConnectionState()
 
         /**
-         * This device is in the process of authenticating with a neighboring device.
+         * This device has discovered a neighboring device and is initiating a connection.
+         * If all goes well, the next state will be [Authenticating].
+         */
+        class Initiating(
+            /**
+             * The ID of the neighbor, which is not meant for human readability.
+             */
+            val neighborId: String,
+
+            /**
+             * The human readable name of the neighbor.
+             */
+            val neighborName: String
+        ) : ConnectionState()
+
+        /**
+         * This device is in the process of authenticating with a neighboring device. If both
+         * devices accept the token, the next state will be [Connecting].
          */
         class Authenticating(
             // Sealed classes can't be inner, so we need to pass in the connection.
             private val nearbyConnection: NearbyConnection,
+
+            // If the token is rejected, we will revert to this prior state.
+            private val fallbackState: ConnectionState,
+
             /**
              * The ID of the neighbor, which is not meant for human readability.
              */
@@ -102,11 +130,15 @@ class NearbyConnection(
              */
             val token: String
         ) : ConnectionState() {
+
             /**
              * Accepts the connection to the neighbor.
              */
             fun accept() {
-                nearbyConnection.connectionsClient.acceptConnection(neighborId, nearbyConnection.payloadCallback)
+                nearbyConnection.connectionsClient.acceptConnection(
+                    neighborId,
+                    nearbyConnection.payloadCallback
+                )
                 nearbyConnection.updateState(Connecting(neighborId, neighborName))
             }
 
@@ -116,12 +148,12 @@ class NearbyConnection(
             fun reject() {
                 nearbyConnection.connectionsClient.rejectConnection(neighborId)
                 // This should put us back in advertising or discovering.
-                nearbyConnection.updateState(nearbyConnection.connectionState)
+                nearbyConnection.updateState(fallbackState)
             }
         }
 
         /**
-         * The connection has been successfully authenticated (or authentication is disabled).
+         * The connection has been successfully authenticated.
          * Unless an error occurs, the next state will be [ReadyToSend].
          *
          * @param neighborId the neighbor's ID, which is not meant for human readability
@@ -147,7 +179,8 @@ class NearbyConnection(
          * @param payloadId the ID of the message that was sent, which will appear again
          *   in [NearbyConnectionObserver.onMessageDelivered]
          */
-        class Sending(val neighborId: String, val neighborName: String?, val payloadId: Long) : ConnectionState()
+        class Sending(val neighborId: String, val neighborName: String?, val payloadId: Long) :
+            ConnectionState()
 
         /**
          * A failure has occurred.
@@ -161,8 +194,23 @@ class NearbyConnection(
     // callbacks so is synchronized.
     private var connectionState: ConnectionState = ConnectionState.Isolated
 
+    // Override all 3 register() methods to notify listener of initial state.
+    override fun register(
+        observer: NearbyConnectionObserver,
+        owner: LifecycleOwner,
+        autoPause: Boolean
+    ) {
+        delegate.register(observer, owner, autoPause)
+        observer.onStateUpdated(connectionState)
+    }
+
     override fun register(observer: NearbyConnectionObserver) {
         delegate.register(observer)
+        observer.onStateUpdated(connectionState)
+    }
+
+    override fun register(observer: NearbyConnectionObserver, view: View) {
+        delegate.register(observer, view)
         observer.onStateUpdated(connectionState)
     }
 
@@ -204,7 +252,8 @@ class NearbyConnection(
     fun startDiscovering() {
         connectionsClient.startDiscovery(
             PACKAGE_NAME, endpointDiscoveryCallback,
-            DiscoveryOptions.Builder().setStrategy(STRATEGY).build())
+            DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
+        )
             .addOnSuccessListener {
                 updateState(ConnectionState.Discovering)
             }.addOnFailureListener {
@@ -216,7 +265,7 @@ class NearbyConnection(
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             connectionsClient.requestConnection(name, endpointId, connectionLifecycleCallback)
-            updateState(ConnectionState.Connecting(endpointId, info.endpointName))
+            updateState(ConnectionState.Initiating(endpointId, info.endpointName))
         }
 
         override fun onEndpointLost(endpointId: String) {
@@ -228,10 +277,15 @@ class NearbyConnection(
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             // This is the last time we have access to the endpoint name, so cache it.
-            endpointIdsToNames.put(endpointId, connectionInfo.endpointName)
+            endpointIdsToNames[endpointId] = connectionInfo.endpointName
             updateState(
                 ConnectionState.Authenticating(
                     this@NearbyConnection,
+                    if (connectionState is ConnectionState.Advertising) {
+                        connectionState
+                    } else {
+                        ConnectionState.Discovering
+                    },
                     endpointId,
                     connectionInfo.endpointName,
                     connectionInfo.authenticationToken
@@ -243,9 +297,12 @@ class NearbyConnection(
             if (result.status.isSuccess) {
                 connectionsClient.stopDiscovery()
                 connectionsClient.stopAdvertising()
-                updateState(ConnectionState.ReadyToSend(
-                    endpointId,
-                    endpointIdsToNames[endpointId]))
+                updateState(
+                    ConnectionState.ReadyToSend(
+                        endpointId,
+                        endpointIdsToNames[endpointId]
+                    )
+                )
             } else {
                 reportError("onConnectionResult: connection failed with status ${result.status}")
             }
@@ -258,27 +315,26 @@ class NearbyConnection(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            val message =
-                when(payload.type) {
-                    Payload.Type.BYTES -> payload.asBytes()?.let { String(it, UTF_8) } ?: ""
-                    Payload.Type.STREAM ->
-                        payload.asStream()?.asInputStream()?.bufferedReader()?.readText()
-                            ?: "Error reading incoming message"
-                    else -> "Error reading incoming message"
-                }
             notifyObservers {
-                onMessageReceived(endpointId, endpointIdsToNames[endpointId], message)
+                onMessageReceived(
+                    endpointId,
+                    endpointIdsToNames[endpointId],
+                    payload.asBytes()?.let { String(it, UTF_8) } ?: "")
             }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             // Make sure it's reporting on our outgoing message, not an incoming one.
             if (update.status == Status.SUCCESS &&
-                (connectionState as? ConnectionState.Sending)?.payloadId == update.payloadId) {
+                (connectionState as? ConnectionState.Sending)?.payloadId == update.payloadId
+            ) {
                 notifyObservers { onMessageDelivered(update.payloadId) }
-                updateState(ConnectionState.ReadyToSend(
-                    endpointId,
-                    endpointIdsToNames[endpointId]))
+                updateState(
+                    ConnectionState.ReadyToSend(
+                        endpointId,
+                        endpointIdsToNames[endpointId]
+                    )
+                )
             }
         }
     }
@@ -325,19 +381,22 @@ class NearbyConnection(
     }
 
     private fun reportError(msg: String) {
-        Logger.error(msg)
+        logger.error(msg)
         updateState(ConnectionState.Failure(msg))
     }
 
     companion object {
-        private const val PACKAGE_NAME = "mozilla.components.lib.nearby"
-        private val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
+        @VisibleForTesting
+        internal const val PACKAGE_NAME = "mozilla.components.lib.nearby"
+        @VisibleForTesting
         private val STRATEGY = Strategy.P2P_STAR
-        // The maximum number of bytes to send through Payload.fromBytes();
-        // otherwise, use Payload.getStream(). We use a constant rather than
-        // hardcoding MAX_BYTES_DATA_SIZE above to make it easier to set a
-        // temporarily low limit.
-        private val MAX_PAYLOAD_BYTES = ConnectionsClient.MAX_BYTES_DATA_SIZE
+
+        private val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
+                // The maximum number of bytes to send through Payload.fromBytes();
+                // otherwise, use Payload.getStream(). We use a constant rather than
+                // hardcoding MAX_BYTES_DATA_SIZE above to make it easier to set a
+                // temporarily low limit.
+                private val MAX_PAYLOAD_BYTES = ConnectionsClient.MAX_BYTES_DATA_SIZE
 
         /**
          * The permissions needed by [NearbyConnection]. It is the client's responsibility
