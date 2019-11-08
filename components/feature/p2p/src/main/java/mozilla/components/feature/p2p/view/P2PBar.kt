@@ -13,6 +13,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintLayout
 import kotlinx.android.synthetic.main.mozac_feature_p2p_view.view.*
 import mozilla.components.feature.p2p.R
+import mozilla.components.support.base.log.logger.Logger
 
 private const val DEFAULT_VALUE = 0
 
@@ -26,6 +27,7 @@ class P2PBar @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : ConstraintLayout(context, attrs, defStyleAttr), P2PView {
     override var listener: P2PView.Listener? = null
+    val logger = Logger("P2PBar")
 
     init {
         inflate(getContext(), R.layout.mozac_feature_p2p_view, this)
@@ -58,18 +60,19 @@ class P2PBar @JvmOverloads constructor(
     }
 
     private fun showButton(btn: Button, b: Boolean) {
+        logger.error("For view ${hashCode()}, setting ${btn.id} to $b")
         btn.visibility = if (b) View.VISIBLE else View.GONE
         btn.isEnabled = b
     }
 
-    private fun showConnectButtons(b: Boolean) {
+    internal fun showConnectButtons(b: Boolean) {
         // Either the advertise and discover buttons are visible and enabled, or the reset button is.
         showButton(p2pAdvertiseBtn, b)
         showButton(p2pDiscoverBtn, b)
         showButton(p2pResetBtn, !b)
     }
 
-    private fun showSendButtons(b: Boolean = true) {
+    internal fun showSendButtons(b: Boolean = true) {
         showButton(p2pSendUrlBtn, b)
         showButton(p2pSendPageBtn, b)
     }

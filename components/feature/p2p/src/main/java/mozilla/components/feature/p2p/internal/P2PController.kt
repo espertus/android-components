@@ -27,53 +27,60 @@ internal class P2PController(
     private val sessionUseCases: SessionUseCases,
     private val sender: P2PFeature.P2PFeatureSender
 ) : P2PView.Listener {
-    private lateinit var nearbyConnection: NearbyConnection
-    private var savedConnectionState: ConnectionState? = null
+    private val logger = Logger("P2PController")
+
+    private val observer = object : NearbyConnectionObserver {
+        @Synchronized
+        override fun onStateUpdated(connectionState: ConnectionState) {
+            savedConnectionState = connectionState
+            view.updateStatus(connectionState.name)
+            logger.error("Entering state ${connectionState.name}")
+            when (connectionState) {
+                is ConnectionState.Authenticating -> {
+                    view.authenticate(
+                        connectionState.neighborId,
+                        connectionState.neighborName,
+                        connectionState.token
+                    )
+                }
+                is ConnectionState.ReadyToSend -> view.readyToSend()
+                is ConnectionState.Failure -> view.failure(connectionState.message)
+                is ConnectionState.Isolated -> view.clear()
+            }
+        }
+
+        override fun onMessageDelivered(payloadId: Long) {
+            // For now, do nothing.
+        }
+
+        override fun onMessageReceived(neighborId: String, neighborName: String?, message: String) {
+            if (message.length > 1) {
+                when (message[0]) {
+                    MESSAGE_PREFIX_FOR_HTML -> view.receivePage(
+                        neighborId, neighborName, message.substring(1)
+                    )
+                    MESSAGE_PREFIX_FOR_URL -> view.receiveUrl(
+                        neighborId, neighborName, message.substring(1)
+                    )
+                    else -> reportError("Cannot parse incoming message $message")
+                }
+            } else {
+                reportError("Trivial message received: '$message'")
+            }
+        }
+    }
 
     fun start() {
         view.listener = this
-        nearbyConnection = thunk()
-        nearbyConnection.register(
-            object : NearbyConnectionObserver {
-                @Synchronized
-                override fun onStateUpdated(connectionState: ConnectionState) {
-                    savedConnectionState = connectionState
-                    view.updateStatus(connectionState.name)
-                    when (connectionState) {
-                        is ConnectionState.Authenticating -> view.authenticate(
-                            connectionState.neighborId,
-                            connectionState.neighborName,
-                            connectionState.token)
-                        is ConnectionState.ReadyToSend -> view.readyToSend()
-                        is ConnectionState.Failure -> view.failure(connectionState.message)
-                        is ConnectionState.Isolated -> view.clear()
-                    }
-                }
-
-                override fun onMessageDelivered(payloadId: Long) {
-                    // For now, do nothing.
-                }
-
-                override fun onMessageReceived(neighborId: String, neighborName: String?, message: String) {
-                    if (message.length > 1) {
-                        when(message[0]) {
-                            MESSAGE_PREFIX_FOR_HTML -> view.receivePage(
-                                neighborId, neighborName, message.substring(1))
-                            MESSAGE_PREFIX_FOR_URL -> view.receiveUrl(
-                                neighborId, neighborName, message.substring(1))
-                            else -> reportError("Cannot parse incoming message $message")
-                        }
-                    } else {
-                        reportError("Trivial message received: '$message'")
-                    }
-                }
-            },
-            // I need to do this cast to get an object that extends View
-            view as P2PBar
-        )
+        if (nearbyConnection == null) {
+            nearbyConnection = thunk()
+        }
+        nearbyConnection?.register(observer, view as P2PBar)
     }
 
-    fun stop() {}
+    fun stop() {
+        nearbyConnection?.unregisterObservers()
+    }
 
     @Synchronized
     private fun reportError(msg: String) {
@@ -91,11 +98,11 @@ internal class P2PController(
     // P2PView.Listener implementation
 
     override fun onAdvertise() {
-        nearbyConnection.startAdvertising()
+        nearbyConnection?.startAdvertising()
     }
 
     override fun onDiscover() {
-        nearbyConnection.startDiscovering()
+        nearbyConnection?.startDiscovering()
     }
 
     override fun onAccept(token: String) {
@@ -115,13 +122,13 @@ internal class P2PController(
     }
 
     override fun onReset() {
-        nearbyConnection.disconnect()
+        nearbyConnection?.disconnect()
     }
 
     override fun onSendUrl() {
         if (cast<ConnectionState.ReadyToSend>() != null) {
             store.state.selectedTab?.content?.url?.let {
-                if (nearbyConnection.sendMessage("$MESSAGE_PREFIX_FOR_URL$it") == null) {
+                if (nearbyConnection?.sendMessage("$MESSAGE_PREFIX_FOR_URL$it") == null) {
                     reportError("Unable to send message: sendMessage() returns null")
                 }
             } ?: run {
@@ -138,7 +145,7 @@ internal class P2PController(
 
     fun onPageReadyToSend(page: String) {
         if (cast<ConnectionState.ReadyToSend>() != null) {
-            if (nearbyConnection.sendMessage("$MESSAGE_PREFIX_FOR_HTML$page") == null) {
+            if (nearbyConnection?.sendMessage("$MESSAGE_PREFIX_FOR_HTML$page") == null) {
                 reportError("Unable to send message: sendMessage() returns null")
             }
             return
@@ -153,5 +160,8 @@ internal class P2PController(
     companion object {
         const val MESSAGE_PREFIX_FOR_URL = 'U'
         const val MESSAGE_PREFIX_FOR_HTML = 'H'
+
+        private var savedConnectionState: ConnectionState? = null
+        private var nearbyConnection: NearbyConnection? = null
     }
 }

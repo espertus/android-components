@@ -55,6 +55,7 @@ class P2PIntegration(
     }
 
     private fun launch() {
+        feature.initializeView(view)
         view.asView().visibility = View.VISIBLE
     }
 

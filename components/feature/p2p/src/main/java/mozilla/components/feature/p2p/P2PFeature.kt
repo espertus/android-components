@@ -34,26 +34,19 @@ import org.json.JSONObject
  * Feature implementation for peer-to-peer communication between browsers.
  */
 class P2PFeature(
-    view: P2PView,
-    store: BrowserStore,
+    private val view: P2PView,
+    private val store: BrowserStore,
     private val engine: Engine,
-    thunk: () -> NearbyConnection,
-    tabsUseCases: TabsUseCases,
-    sessionUseCases: SessionUseCases,
+    private val thunk: () -> NearbyConnection,
+    private val tabsUseCases: TabsUseCases,
+    private val sessionUseCases: SessionUseCases,
     private val sessionManager: SessionManager,
     override val onNeedToRequestPermissions: OnNeedToRequestPermissions,
     private val onClose: (() -> Unit)
 ) : SelectionAwareSessionObserver(sessionManager), LifecycleAwareFeature, PermissionsFeature,
     BackHandler {
-    @VisibleForTesting
-    internal var controller = P2PController(store, thunk, view, tabsUseCases, sessionUseCases, P2PFeatureSender())
-
     private val logger = Logger("P2P")
     private var session: SessionState? = null
-
-    @VisibleForTesting
-    // This is an internal var to make it mutable for unit testing purposes only
-    internal var extensionController = WebExtensionController(P2P_EXTENSION_ID, P2P_EXTENSION_URL)
 
     // LifeCycleAwareFeature implementation
 
@@ -63,7 +56,7 @@ class P2PFeature(
 
     override fun stop() {
         super.stop()
-        controller.stop()
+        controller?.stop()
     }
 
     // PermissionsFeature implementation
@@ -102,11 +95,24 @@ class P2PFeature(
     }
 
     private fun startExtension() {
-        observeSelected()
-        registerP2PContentMessageHandler()
+        if (extensionController == null) {
+            extensionController = WebExtensionController(P2P_EXTENSION_ID, P2P_EXTENSION_URL)
 
-        extensionController.install(engine)
-        controller.start()
+            observeSelected()
+            registerP2PContentMessageHandler()
+
+            extensionController?.install(engine)
+        }
+
+        if (controller == null) {
+            controller =
+                P2PController(store, thunk, view, tabsUseCases, sessionUseCases, P2PFeatureSender())
+        }
+        controller?.start()
+    }
+
+    fun initializeView(newView: P2PView) {
+        logger.error("view = $view, newView = $newView")
     }
 
     @VisibleForTesting
@@ -117,8 +123,8 @@ class P2PFeature(
 
         val engineSession = sessionManager.getOrCreateEngineSession(session)
         val messageHandler = P2PContentMessageHandler(session)
-        extensionController.registerContentMessageHandler(engineSession, messageHandler)
-        extensionController.registerBackgroundMessageHandler(P2PBackgroundMessageHandler(session))
+        extensionController?.registerContentMessageHandler(engineSession, messageHandler)
+        extensionController?.registerBackgroundMessageHandler(P2PBackgroundMessageHandler(session))
     }
 
     private inner class P2PContentMessageHandler(
@@ -130,9 +136,9 @@ class P2PFeature(
         }
 
         override fun onPortMessage(message: Any, port: Port) {
-            logger.error("P2PC receives a port message: $message")
+            logger.error("P2PC receives a port message")
             if (message is String) {
-                controller.onPageReadyToSend(message)
+                controller?.onPageReadyToSend(message)
             } else {
                 logger.error("P2PC message is not a string.")
             }
@@ -186,7 +192,7 @@ class P2PFeature(
         private fun sendMessage(json: JSONObject) {
             activeSession?.let {
                 logger.error("I'm sending a ${json[ACTION_MESSAGE_KEY]} message")
-                extensionController.sendContentMessage(
+                extensionController?.sendContentMessage(
                     json,
                     sessionManager.getOrCreateEngineSession(it)
                 )
@@ -205,5 +211,10 @@ class P2PFeature(
         const val ACTION_GET_HTML = "get_html"
 
         const val ACTION_VALUE_KEY = "value"
+
+        @VisibleForTesting
+        internal var controller: P2PController? = null
+        @VisibleForTesting
+        internal var extensionController: WebExtensionController? = null
     }
 }
