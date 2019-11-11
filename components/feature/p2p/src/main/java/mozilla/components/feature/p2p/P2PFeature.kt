@@ -45,8 +45,12 @@ class P2PFeature(
     private val onClose: (() -> Unit)
 ) : SelectionAwareSessionObserver(sessionManager), LifecycleAwareFeature, PermissionsFeature,
     BackHandler {
-    private val logger = Logger("P2P")
+    private val logger = Logger("P2PFeature")
     private var session: SessionState? = null
+    @VisibleForTesting
+    internal lateinit var controller: P2PController
+    @VisibleForTesting
+    internal lateinit var extensionController: WebExtensionController
 
     // LifeCycleAwareFeature implementation
 
@@ -56,7 +60,7 @@ class P2PFeature(
 
     override fun stop() {
         super.stop()
-        controller?.stop()
+        controller.stop()
     }
 
     // PermissionsFeature implementation
@@ -95,24 +99,14 @@ class P2PFeature(
     }
 
     private fun startExtension() {
-        if (extensionController == null) {
-            extensionController = WebExtensionController(P2P_EXTENSION_ID, P2P_EXTENSION_URL)
+        observeSelected() // this sets actionSession
 
-            observeSelected()
-            registerP2PContentMessageHandler()
+        extensionController = WebExtensionController(P2P_EXTENSION_ID, P2P_EXTENSION_URL)
+        registerP2PContentMessageHandler() // this uses extensionController
+        extensionController.install(engine)
 
-            extensionController?.install(engine)
-        }
-
-        if (controller == null) {
-            controller =
-                P2PController(store, thunk, view, tabsUseCases, sessionUseCases, P2PFeatureSender())
-        }
-        controller?.start()
-    }
-
-    fun initializeView(newView: P2PView) {
-        logger.error("view = $view, newView = $newView")
+        controller = P2PController(store, thunk, view, tabsUseCases, sessionUseCases, P2PFeatureSender())
+        controller.start()
     }
 
     @VisibleForTesting
@@ -123,8 +117,8 @@ class P2PFeature(
 
         val engineSession = sessionManager.getOrCreateEngineSession(session)
         val messageHandler = P2PContentMessageHandler(session)
-        extensionController?.registerContentMessageHandler(engineSession, messageHandler)
-        extensionController?.registerBackgroundMessageHandler(P2PBackgroundMessageHandler(session))
+        extensionController.registerContentMessageHandler(engineSession, messageHandler)
+        extensionController.registerBackgroundMessageHandler(P2PBackgroundMessageHandler(session))
     }
 
     private inner class P2PContentMessageHandler(
@@ -138,7 +132,7 @@ class P2PFeature(
         override fun onPortMessage(message: Any, port: Port) {
             logger.error("P2PC receives a port message")
             if (message is String) {
-                controller?.onPageReadyToSend(message)
+                controller.onPageReadyToSend(message)
             } else {
                 logger.error("P2PC message is not a string.")
             }
@@ -184,7 +178,13 @@ class P2PFeature(
         return true
     }
 
+    /**
+     * A class able to request an encoding of the current web page.
+     */
     inner class P2PFeatureSender {
+        /**
+         * Requests an encoding of the current web page suitable for sending to another device.
+         */
         fun requestHtml() {
             sendMessage(JSONObject().put(ACTION_MESSAGE_KEY, ACTION_GET_HTML))
         }
@@ -192,7 +192,7 @@ class P2PFeature(
         private fun sendMessage(json: JSONObject) {
             activeSession?.let {
                 logger.error("I'm sending a ${json[ACTION_MESSAGE_KEY]} message")
-                extensionController?.sendContentMessage(
+                extensionController.sendContentMessage(
                     json,
                     sessionManager.getOrCreateEngineSession(it)
                 )
@@ -202,19 +202,14 @@ class P2PFeature(
 
     @VisibleForTesting
     companion object {
-        internal const val P2P_EXTENSION_ID = "mozacP2P"
-        internal const val P2P_EXTENSION_URL = "resource://android/assets/extensions/p2p/"
+        private const val P2P_EXTENSION_ID = "mozacP2P"
+        private const val P2P_EXTENSION_URL = "resource://android/assets/extensions/p2p/"
 
         // Constants for building messages sent to the web extension:
-        // TODO
+        // TODO comments
         const val ACTION_MESSAGE_KEY = "action"
         const val ACTION_GET_HTML = "get_html"
 
         const val ACTION_VALUE_KEY = "value"
-
-        @VisibleForTesting
-        internal var controller: P2PController? = null
-        @VisibleForTesting
-        internal var extensionController: WebExtensionController? = null
     }
 }

@@ -21,13 +21,14 @@ private const val DEFAULT_VALUE = 0
  * A toolbar for peer-to-peer communication between browsers. Setting [listener] causes the
  * buttons to become active.
  */
+@Suppress("TooManyFunctions")
 class P2PBar @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ConstraintLayout(context, attrs, defStyleAttr), P2PView {
     override var listener: P2PView.Listener? = null
-    val logger = Logger("P2PBar")
+    private val logger = Logger("P2PBar")
 
     init {
         inflate(getContext(), R.layout.mozac_feature_p2p_view, this)
@@ -57,6 +58,11 @@ class P2PBar @JvmOverloads constructor(
             listener?.onReset()
             clear()
         }
+    }
+
+    override fun initializeButtons(connectB: Boolean, sendB: Boolean) {
+        showConnectButtons(connectB) // advertise, discover, !reset
+        showSendButtons(sendB) // send URL, send page
     }
 
     private fun showButton(btn: Button, b: Boolean) {

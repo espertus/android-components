@@ -19,6 +19,7 @@ import mozilla.components.support.base.log.logger.Logger
 /**
  * Controller that mediates between [P2PView] and [NearbyConnection].
  */
+@Suppress("TooManyFunctions")
 internal class P2PController(
     private val store: BrowserStore,
     private val thunk: () -> NearbyConnection,
@@ -72,8 +73,20 @@ internal class P2PController(
 
     fun start() {
         view.listener = this
-        if (nearbyConnection == null) {
+        if (nearbyConnection == null || savedConnectionState == null) {
             nearbyConnection = thunk()
+            savedConnectionState = null
+        } else {
+            when (savedConnectionState) {
+                is ConnectionState.Isolated -> view.initializeButtons(true, false)
+                is ConnectionState.Advertising,
+                is ConnectionState.Discovering,
+                is ConnectionState.Initiating,
+                is ConnectionState.Authenticating,
+                is ConnectionState.Connecting -> view.initializeButtons(false, false)
+                is ConnectionState.ReadyToSend -> view.initializeButtons(false, true)
+                is ConnectionState.Failure -> view.initializeButtons(false, false)
+            }
         }
         nearbyConnection?.register(observer, view as P2PBar)
     }

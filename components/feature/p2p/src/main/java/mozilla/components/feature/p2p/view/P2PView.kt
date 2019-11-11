@@ -17,6 +17,18 @@ interface P2PView {
     var listener: Listener?
 
     /**
+     * This initializes the buttons of a [P2PView] to restore the past button state.
+     * It need not be called on the first [P2PView] but should be called after one is destroyed
+     * and another inflated. It is up to the implementation how the buttons should be presented
+     * (such as whether they should be [View.GONE], [View.INVISIBLE], or just disabled when not
+     * being presented. The reset button is enabled whenever the connection buttons are not.
+     *
+     * @param connectB whether the connection buttons (advertise and discover) should be presented
+     * @param sendB whether the send buttons (sendUrl and sendPage) should be presented
+     */
+    fun initializeButtons(connectB: Boolean, sendB: Boolean)
+
+    /**
      * Optionally displays the status of the connection. The implementation should not take other
      * actions based on the status, since the values of the strings could change.
      *
@@ -71,6 +83,16 @@ interface P2PView {
      */
     fun receiveUrl(neighborId: String, neighborName: String?, url: String)
 
+    /**
+     * Handles receipt of a web page from another device. Only an internal
+     * error would cause `neighborName` to be null. To be robust, a view should use
+     * `neighborName ?: neighborId` as the name of the neighbor.
+     *
+     * @param neighborId the endpoint ID of the neighbor
+     * @param neighborName the name of the neighbor, which will only be null if there was
+     *     an internal error in the connection library
+     * @param page a representation of the web page
+     */
     fun receivePage(neighborId: String, neighborName: String?, page: String)
 
     /**

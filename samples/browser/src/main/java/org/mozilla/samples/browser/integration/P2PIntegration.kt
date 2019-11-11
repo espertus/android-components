@@ -17,6 +17,9 @@ import mozilla.components.support.base.feature.BackHandler
 import mozilla.components.support.base.feature.LifecycleAwareFeature
 import mozilla.components.support.base.feature.OnNeedToRequestPermissions
 
+/**
+ * Functionality to integrate a peer-to-peer communication toolbar in an application.
+ */
 class P2PIntegration(
     private val store: BrowserStore,
     private val engine: Engine,
@@ -55,7 +58,6 @@ class P2PIntegration(
     }
 
     private fun launch() {
-        feature.initializeView(view)
         view.asView().visibility = View.VISIBLE
     }
 
