@@ -66,7 +66,6 @@ class P2PBar @JvmOverloads constructor(
     }
 
     private fun showButton(btn: Button, b: Boolean) {
-        logger.error("For view ${hashCode()}, setting ${btn.id} to $b")
         btn.visibility = if (b) View.VISIBLE else View.GONE
         btn.isEnabled = b
     }
