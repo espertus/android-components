@@ -4,7 +4,7 @@
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- String for button for this device to advertise its presence to nearby devices. -->
-    <string name="mozac_feature_p2p_advertise">Advertise</string>
+    <string name="mozac_feature_p2p_advertise">TEST EXTENSION</string>
 
     <!-- String for button for this device to discover the presence of nearby devices. -->
     <string name="mozac_feature_p2p_discover">Discover</string>

@@ -151,9 +151,10 @@ internal class P2PController(
     }
 
     override fun onSendPage() {
-        if (cast<ConnectionState.ReadyToSend>() != null) {
+        // Temporarily comment out checks.
+//        if (cast<ConnectionState.ReadyToSend>() != null) {
             sender.requestHtml()
-        }
+//        }
     }
 
     fun onPageReadyToSend(page: String) {

@@ -35,7 +35,9 @@ class P2PBar @JvmOverloads constructor(
 
         p2pAdvertiseBtn.setOnClickListener {
             require(listener != null)
-            listener?.onAdvertise()
+            // Temporarily change for debugging.
+            // listener?.onAdvertise()
+            listener?.onSendPage()
             showConnectButtons(false)
         }
         p2pDiscoverBtn.setOnClickListener {
