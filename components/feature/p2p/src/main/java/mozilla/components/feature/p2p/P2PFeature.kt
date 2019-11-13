@@ -130,7 +130,7 @@ class P2PFeature(
         }
 
         override fun onPortMessage(message: Any, port: Port) {
-            logger.error("P2PC receives a port message")
+            logger.error("P2PC receives a port message: $message")
             if (message is String) {
                 controller.onPageReadyToSend(message)
             } else {

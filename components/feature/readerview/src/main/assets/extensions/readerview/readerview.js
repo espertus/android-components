@@ -49,7 +49,8 @@ class ReaderView {
     if (location.pathname == "/") {
       return false;
     }
-
+    console.log("isProbablyReaderable is: " + isProbablyReaderable) //defined
+    console.log("Readability is: " + Readability);  // defined
     return isProbablyReaderable(document, ReaderView._isNodeVisible);
   }
 
