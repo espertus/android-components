@@ -49,8 +49,8 @@ class ReaderView {
     if (location.pathname == "/") {
       return false;
     }
-    console.log("isProbablyReaderable is: " + isProbablyReaderable) //defined
-    console.log("Readability is: " + Readability);  // defined
+    console.log("Readability is: " + Readability);  // undefined
+    console.log("isProbablyReaderable is: " + isProbablyReaderable) // undefined
     return isProbablyReaderable(document, ReaderView._isNodeVisible); // [JavaScript Error: "isProbablyReaderable is not defined" {file: "moz-extension://e7b09ef2-d833-476c-8bda-1d42b0c9eab3/p2p.js" line: 52}]
   }
 

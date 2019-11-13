@@ -49,8 +49,8 @@ class ReaderView {
     if (location.pathname == "/") {
       return false;
     }
-    console.log("isProbablyReaderable is: " + isProbablyReaderable) //defined
     console.log("Readability is: " + Readability);  // defined
+    console.log("isProbablyReaderable is: " + isProbablyReaderable) //defined
     return isProbablyReaderable(document, ReaderView._isNodeVisible);
   }
 
@@ -320,6 +320,10 @@ let readerView = new ReaderView();
 
 let port = browser.runtime.connectNative("mozacReaderview");
 port.onMessage.addListener((message) => {
+    console.log("Hello from listener");
+    port.postMessage("Hello from listener")
+    port.postMessage({readerable: ReaderView.isReaderable()});
+    console.log(ReaderView.isReaderable()) // This logs true
     switch (message.action) {
       case 'show':
         readerView.show(message.value);
