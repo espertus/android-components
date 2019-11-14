@@ -9,7 +9,7 @@ port.onMessage.addListener((message) => {
   console.log("Hooray! A message arrived for me!");
     switch (message.action) {
       case 'get_html':
-        port.postMessage(document.documentElement.innerHTML)
+        port.postMessage("All is well!")
         //post(freeze_dry())
         break;
       default:
