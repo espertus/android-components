@@ -3,26 +3,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 //require('freeze-dry')
 
-let port = browser.runtime.connectNative("mozacP2P");
-
-port.onMessage.addListener((message) => {
-  console.log("Hooray! A message arrived for me!");
-    switch (message.action) {
-      case 'get_html':
-        port.postMessage("All is well!")
-        //post(freeze_dry())
-        break;
-      default:
-        console.log("I do not know how to handle this action: ${message.action}")
-    }
-})
-
-port.onDisconnect.addListener((p) => {
-  if (p.error) {
-    console.log("Wah! Disconnected due to an error: ${p.error.message}");
-  } else {
-    console.log("Disconnected properly")
-  }
-});
-
-window.addEventListener("unload", (event) => { console.log("Time to disconnect. Bye!"); port.disconnect() }, false);
+console.log("Hello world!!!");
+let fd = require('freeze-dry');
+console.log(fd.default);
+console.log(fd.default());
