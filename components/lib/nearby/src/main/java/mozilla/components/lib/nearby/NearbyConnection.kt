@@ -7,6 +7,9 @@ package mozilla.components.lib.nearby
 import android.Manifest
 import android.content.Context
 import android.os.Build
+import android.view.View
+import androidx.annotation.VisibleForTesting
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -26,7 +29,6 @@ import mozilla.components.support.base.observer.Observable
 import mozilla.components.support.base.observer.ObserverRegistry
 import java.io.ByteArrayInputStream
 import java.nio.charset.Charset
-import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -40,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap
  * @param connectionsClient the underlying client
  * @param name a human-readable name for this device
  */
+@Suppress("TooManyFunctions")
 class NearbyConnection(
     private val connectionsClient: ConnectionsClient,
     private val name: String = Build.MODEL,
@@ -48,11 +51,18 @@ class NearbyConnection(
     /**
      * Another constructor
      */
-    constructor(context: Context, name: String = Build.MODEL) : this(Nearby.getConnectionsClient(context), name)
+    constructor(context: Context, name: String = Build.MODEL) : this(
+        Nearby.getConnectionsClient(
+            context
+        ), name
+    )
 
     // I assume that the number of endpoints encountered during the lifetime of the application
     // will be small and do not remove them from the map.
-    private val endpointIdsToNames = ConcurrentHashMap<String, String>()
+    @VisibleForTesting
+    internal val endpointIdsToNames = ConcurrentHashMap<String, String>()
+
+    private val logger = Logger("NearbyConnection")
 
     /**
      * The state of the connection. Changes in state are communicated to the client through
@@ -71,21 +81,44 @@ class NearbyConnection(
         object Isolated : ConnectionState()
 
         /**
-         * This device is advertising its presence.
+         * This device is advertising its presence. If it is discovered by another device,
+         * the next state will be [Authenticating].
          */
         object Advertising : ConnectionState()
 
         /**
-         * This device is trying to discover devices that are advertising.
+         * This device is trying to discover devices that are advertising. If it discovers one,
+         * the next state with be [Initiating].
          */
         object Discovering : ConnectionState()
 
         /**
-         * This device is in the process of authenticating with a neighboring device.
+         * This device has discovered a neighboring device and is initiating a connection.
+         * If all goes well, the next state will be [Authenticating].
+         */
+        class Initiating(
+            /**
+             * The ID of the neighbor, which is not meant for human readability.
+             */
+            val neighborId: String,
+
+            /**
+             * The human readable name of the neighbor.
+             */
+            val neighborName: String
+        ) : ConnectionState()
+
+        /**
+         * This device is in the process of authenticating with a neighboring device. If both
+         * devices accept the token, the next state will be [Connecting].
          */
         class Authenticating(
             // Sealed classes can't be inner, so we need to pass in the connection.
             private val nearbyConnection: NearbyConnection,
+
+            // If the token is rejected, we will revert to this prior state.
+            private val fallbackState: ConnectionState,
+
             /**
              * The ID of the neighbor, which is not meant for human readability.
              */
@@ -102,11 +135,15 @@ class NearbyConnection(
              */
             val token: String
         ) : ConnectionState() {
+
             /**
              * Accepts the connection to the neighbor.
              */
             fun accept() {
-                nearbyConnection.connectionsClient.acceptConnection(neighborId, nearbyConnection.payloadCallback)
+                nearbyConnection.connectionsClient.acceptConnection(
+                    neighborId,
+                    nearbyConnection.payloadCallback
+                )
                 nearbyConnection.updateState(Connecting(neighborId, neighborName))
             }
 
@@ -116,12 +153,12 @@ class NearbyConnection(
             fun reject() {
                 nearbyConnection.connectionsClient.rejectConnection(neighborId)
                 // This should put us back in advertising or discovering.
-                nearbyConnection.updateState(nearbyConnection.connectionState)
+                nearbyConnection.updateState(fallbackState)
             }
         }
 
         /**
-         * The connection has been successfully authenticated (or authentication is disabled).
+         * The connection has been successfully authenticated.
          * Unless an error occurs, the next state will be [ReadyToSend].
          *
          * @param neighborId the neighbor's ID, which is not meant for human readability
@@ -147,7 +184,8 @@ class NearbyConnection(
          * @param payloadId the ID of the message that was sent, which will appear again
          *   in [NearbyConnectionObserver.onMessageDelivered]
          */
-        class Sending(val neighborId: String, val neighborName: String?, val payloadId: Long) : ConnectionState()
+        class Sending(val neighborId: String, val neighborName: String?, val payloadId: Long) :
+            ConnectionState()
 
         /**
          * A failure has occurred.
@@ -161,8 +199,23 @@ class NearbyConnection(
     // callbacks so is synchronized.
     private var connectionState: ConnectionState = ConnectionState.Isolated
 
+    // Override all 3 register() methods to notify listener of initial state.
     override fun register(observer: NearbyConnectionObserver) {
         delegate.register(observer)
+        observer.onStateUpdated(connectionState)
+    }
+
+    override fun register(observer: NearbyConnectionObserver, view: View) {
+        delegate.register(observer, view)
+        observer.onStateUpdated(connectionState)
+    }
+
+    override fun register(
+        observer: NearbyConnectionObserver,
+        owner: LifecycleOwner,
+        autoPause: Boolean
+    ) {
+        delegate.register(observer, owner, autoPause)
         observer.onStateUpdated(connectionState)
     }
 
@@ -204,7 +257,8 @@ class NearbyConnection(
     fun startDiscovering() {
         connectionsClient.startDiscovery(
             PACKAGE_NAME, endpointDiscoveryCallback,
-            DiscoveryOptions.Builder().setStrategy(STRATEGY).build())
+            DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
+        )
             .addOnSuccessListener {
                 updateState(ConnectionState.Discovering)
             }.addOnFailureListener {
@@ -216,10 +270,13 @@ class NearbyConnection(
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             connectionsClient.requestConnection(name, endpointId, connectionLifecycleCallback)
-            updateState(ConnectionState.Connecting(endpointId, info.endpointName))
+            updateState(ConnectionState.Initiating(endpointId, info.endpointName))
         }
 
         override fun onEndpointLost(endpointId: String) {
+            // I don't know whether setting the state to Discovering is superfluous,
+            // since I don't know if it's possible for onEndpointFound() to be called
+            // first, or if only one of the callback's two methods will be called.
             updateState(ConnectionState.Discovering)
         }
     }
@@ -228,10 +285,15 @@ class NearbyConnection(
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             // This is the last time we have access to the endpoint name, so cache it.
-            endpointIdsToNames.put(endpointId, connectionInfo.endpointName)
+            endpointIdsToNames[endpointId] = connectionInfo.endpointName
             updateState(
                 ConnectionState.Authenticating(
                     this@NearbyConnection,
+                    if (connectionState is ConnectionState.Advertising) {
+                        connectionState
+                    } else {
+                        ConnectionState.Discovering
+                    },
                     endpointId,
                     connectionInfo.endpointName,
                     connectionInfo.authenticationToken
@@ -243,9 +305,12 @@ class NearbyConnection(
             if (result.status.isSuccess) {
                 connectionsClient.stopDiscovery()
                 connectionsClient.stopAdvertising()
-                updateState(ConnectionState.ReadyToSend(
-                    endpointId,
-                    endpointIdsToNames[endpointId]))
+                updateState(
+                    ConnectionState.ReadyToSend(
+                        endpointId,
+                        endpointIdsToNames[endpointId]
+                    )
+                )
             } else {
                 reportError("onConnectionResult: connection failed with status ${result.status}")
             }
@@ -256,24 +321,56 @@ class NearbyConnection(
         }
     }
 
+    @VisibleForTesting
+    internal fun payloadToString(payload: Payload): String? {
+        if (payload.type == Payload.Type.BYTES) {
+            payload.asBytes()?.let { return String(it, PAYLOAD_ENCODING) }
+        } else if (payload.type == Payload.Type.STREAM) {
+            payload.asStream()?.asInputStream()
+                ?.use { return String(it.readBytes(), PAYLOAD_ENCODING) }
+        }
+        reportError("Received payload had illegal type: ${payload.type}")
+        return null
+    }
+
+    @VisibleForTesting
+    internal fun stringToPayload(message: String): Payload {
+        val bytes = message.toByteArray(PAYLOAD_ENCODING)
+        if (bytes.size <= ConnectionsClient.MAX_BYTES_DATA_SIZE) {
+            logger.error("${bytes.size} <= ${ConnectionsClient.MAX_BYTES_DATA_SIZE}")
+            return Payload.fromBytes(bytes)
+        } else {
+            logger.error("${bytes.size} > ${ConnectionsClient.MAX_BYTES_DATA_SIZE}")
+            // Logically, it might make more sense to use Payload.fromFile() since we
+            // know the size of the string, than Payload.fromStream(), but we would
+            // have to create a file locally to use use the former.
+            return Payload.fromStream(ByteArrayInputStream(bytes))
+        }
+    }
+
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            notifyObservers {
-                onMessageReceived(
-                    endpointId,
-                    endpointIdsToNames[endpointId],
-                    payload.asBytes()?.let { String(it, UTF_8) } ?: "")
+            payloadToString(payload)?.let {
+                notifyObservers {
+                    onMessageReceived(endpointId, endpointIdsToNames[endpointId], it)
+                }
+            } ?: run {
+                reportError("Error interpreting incoming payload")
             }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             // Make sure it's reporting on our outgoing message, not an incoming one.
             if (update.status == Status.SUCCESS &&
-                (connectionState as? ConnectionState.Sending)?.payloadId == update.payloadId) {
+                (connectionState as? ConnectionState.Sending)?.payloadId == update.payloadId
+            ) {
                 notifyObservers { onMessageDelivered(update.payloadId) }
-                updateState(ConnectionState.ReadyToSend(
-                    endpointId,
-                    endpointIdsToNames[endpointId]))
+                updateState(
+                    ConnectionState.ReadyToSend(
+                        endpointId,
+                        endpointIdsToNames[endpointId]
+                    )
+                )
             }
         }
     }
@@ -289,20 +386,15 @@ class NearbyConnection(
     fun sendMessage(message: String): Long? {
         val state = connectionState
         if (state is ConnectionState.ReadyToSend) {
-            val payload =
-                if (message.length <= MAX_PAYLOAD_BYTES) {
-                    Payload.fromBytes(message.toByteArray(PAYLOAD_ENCODING))
-                } else {
-                    // Logically, it might make more sense to use Payload.fromFile() since we
-                    // know the size of the string, than Payload.fromStream(), but we would
-                    // have to create a file locally to use use the former.
-                    Payload.fromStream(ByteArrayInputStream(message.toByteArray(PAYLOAD_ENCODING)))
-                }
+            val payload = stringToPayload(message)
             connectionsClient.sendPayload(state.neighborId, payload)
-            updateState(ConnectionState.Sending(
-                state.neighborId,
-                endpointIdsToNames[state.neighborId],
-                payload.id))
+            updateState(
+                ConnectionState.Sending(
+                    state.neighborId,
+                    endpointIdsToNames[state.neighborId],
+                    payload.id
+                )
+            )
             return payload.id
         }
         return null
@@ -320,18 +412,18 @@ class NearbyConnection(
     }
 
     private fun reportError(msg: String) {
-        Logger.error(msg)
+        logger.error(msg)
         updateState(ConnectionState.Failure(msg))
     }
 
     companion object {
-        private const val PACKAGE_NAME = "mozilla.components.lib.nearby"
-        private val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
+        @VisibleForTesting
+        internal const val PACKAGE_NAME = "mozilla.components.lib.nearby"
+        @VisibleForTesting
+        internal val PAYLOAD_ENCODING: Charset = Charsets.UTF_8
         private val STRATEGY = Strategy.P2P_STAR
         // The maximum number of bytes to send through Payload.fromBytes();
-        // otherwise, use Payload.getStream(). We use a constant rather than
-        // hardcoding MAX_BYTES_DATA_SIZE above to make it easier to set a
-        // temporarily low limit.
+        // otherwise, use Payload.getStream().
         private val MAX_PAYLOAD_BYTES = ConnectionsClient.MAX_BYTES_DATA_SIZE
 
         /**
