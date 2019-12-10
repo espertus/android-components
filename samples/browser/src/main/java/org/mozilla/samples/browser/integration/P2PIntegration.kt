@@ -9,7 +9,7 @@ import mozilla.components.browser.session.SessionManager
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.Engine
 import mozilla.components.feature.p2p.P2PFeature
-import mozilla.components.feature.p2p.view.P2PView
+import mozilla.components.feature.p2p.view.P2PBar
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.nearby.NearbyConnection
@@ -22,7 +22,7 @@ import mozilla.components.support.base.feature.OnNeedToRequestPermissions
 class P2PIntegration(
     store: BrowserStore,
     engine: Engine,
-    private val view: P2PView,
+    private val view: P2PBar,
     thunk: () -> NearbyConnection,
     tabsUseCases: TabsUseCases,
     sessionManager: SessionManager,

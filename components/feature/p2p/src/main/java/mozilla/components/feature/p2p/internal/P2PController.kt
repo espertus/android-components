@@ -177,6 +177,10 @@ internal class P2PController(
 
     override fun onSendPage() {
         if (cast<ConnectionState.ReadyToSend>() != null) {
+            // Because packaging a page takes a long time, we have a status string indicating that
+            // the page is being packaged up. Unlike the other calls to view.updateStatus(), this
+            // does not correspond to a change in NearbyConnection.ConnectionState.
+            view.updateStatus(R.string.mozac_feature_p2p_packaging)
             sender.requestHtml()
         }
     }

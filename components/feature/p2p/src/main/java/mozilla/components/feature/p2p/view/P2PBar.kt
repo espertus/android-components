@@ -146,14 +146,14 @@ class P2PBar @JvmOverloads constructor(
                 listener?.onLoadData(
                     context,
                     page,
-                    true
+                    false
                 )
             }
             .setNeutralButton(context.getString(R.string.mozac_feature_p2p_open_in_new_tab)) { _, _ ->
                 listener?.onLoadData(
                     context,
                     page,
-                    false
+                    true
                 )
             }
             .setNegativeButton(android.R.string.no) { _, _ -> }
